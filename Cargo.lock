@@ -588,13 +588,8 @@ name = "tlab-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "config",
- "serde",
- "thiserror",
  "tlab",
  "tracing",
- "tracing-appender",
- "tracing-subscriber",
 ]
 
 [[package]]

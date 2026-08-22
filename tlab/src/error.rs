@@ -23,7 +23,7 @@ mod tests {
         let err = Error::Internal(anyhow::anyhow!("test").context("context"));
         match err {
             Error::Internal(e) => {
-                println!("{:#}", e);
+                assert_eq!(format!("{e:#}"), "context: test");
             }
         }
     }

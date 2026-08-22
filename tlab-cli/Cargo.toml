@@ -6,9 +6,4 @@ edition = "2024"
 [dependencies]
 tlab = { path = "../tlab" }
 anyhow = "1.0.104"
-config = "0.15.25"
-serde = { version = "1.0.229", features = ["derive"] }
-thiserror = "2.0.20"
 tracing = "0.1.44"
-tracing-appender = "0.2.5"
-tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::Context;
-use serde::Deserialize;
+use serde::{Deserialize, de::DeserializeOwned};
 
 pub struct Loader {
     file: Option<PathBuf>,
@@ -44,7 +44,7 @@ impl Loader {
 
     pub fn try_deserialize<T>(self) -> crate::Result<T>
     where
-        T: serde::Deserialize<'static>,
+        T: DeserializeOwned,
     {
         let config = self.load()?;
         config
@@ -85,7 +85,7 @@ pub struct FileTraceConfig {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, time::SystemTime};
+    use std::{ffi::OsString, fs, time::SystemTime};
 
     use super::*;
 
@@ -99,6 +99,33 @@ mod tests {
             "tlab-config-{}-{timestamp}.{extension}",
             std::process::id()
         ))
+    }
+
+    struct EnvironmentVariable {
+        name: String,
+        previous: Option<OsString>,
+    }
+
+    impl EnvironmentVariable {
+        fn set(name: String, value: &str) -> Self {
+            let previous = std::env::var_os(&name);
+            unsafe {
+                std::env::set_var(&name, value);
+            }
+            Self { name, previous }
+        }
+    }
+
+    impl Drop for EnvironmentVariable {
+        fn drop(&mut self) {
+            unsafe {
+                if let Some(value) = &self.previous {
+                    std::env::set_var(&self.name, value);
+                } else {
+                    std::env::remove_var(&self.name);
+                }
+            }
+        }
     }
 
     #[test]
@@ -124,10 +151,7 @@ mod tests {
     fn loads_values_from_environment_prefix() {
         let prefix = format!("TLAB_CONFIG_TEST_{}", std::process::id());
         let key = format!("{prefix}_TRACING__CONSOLE__FILTER");
-
-        unsafe {
-            std::env::set_var(&key, "debug");
-        }
+        let _filter = EnvironmentVariable::set(key, "debug");
 
         let config = Loader {
             file: None,
@@ -136,10 +160,6 @@ mod tests {
         .env_prefix(&prefix)
         .load()
         .unwrap();
-
-        unsafe {
-            std::env::remove_var(&key);
-        }
 
         assert_eq!(
             config.get_string("tracing.console.filter").unwrap(),

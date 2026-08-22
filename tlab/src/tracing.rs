@@ -86,3 +86,84 @@ fn resolve_filter(configured_filter: &str) -> anyhow::Result<EnvFilter> {
             .with_context(|| format!("invalid tracing filter `{configured_filter}`"))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        ffi::OsString,
+        sync::{Mutex, OnceLock},
+    };
+
+    use super::*;
+    use crate::config::ConsoleTraceConfig;
+
+    fn environment_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    struct EnvironmentVariable {
+        name: &'static str,
+        previous: Option<OsString>,
+    }
+
+    impl EnvironmentVariable {
+        fn set(name: &'static str, value: &str) -> Self {
+            let previous = std::env::var_os(name);
+            unsafe {
+                std::env::set_var(name, value);
+            }
+            Self { name, previous }
+        }
+
+        fn remove(name: &'static str) -> Self {
+            let previous = std::env::var_os(name);
+            unsafe {
+                std::env::remove_var(name);
+            }
+            Self { name, previous }
+        }
+    }
+
+    impl Drop for EnvironmentVariable {
+        fn drop(&mut self) {
+            unsafe {
+                if let Some(value) = &self.previous {
+                    std::env::set_var(self.name, value);
+                } else {
+                    std::env::remove_var(self.name);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn initializes_without_outputs() {
+        initialize(&TracingConfig::default()).unwrap();
+    }
+
+    #[test]
+    fn rejects_invalid_configured_filter() {
+        let _lock = environment_lock().lock().unwrap();
+        let _rust_log = EnvironmentVariable::remove(EnvFilter::DEFAULT_ENV);
+        let config = TracingConfig {
+            console: Some(ConsoleTraceConfig {
+                filter: "[".into(),
+                buffered_lines_limit: 1,
+                lossy: true,
+                ansi: false,
+            }),
+            file: None,
+        };
+
+        assert!(initialize(&config).is_err());
+    }
+
+    #[test]
+    fn rust_log_overrides_the_configured_filter() {
+        let _lock = environment_lock().lock().unwrap();
+        let _rust_log = EnvironmentVariable::set(EnvFilter::DEFAULT_ENV, "[");
+
+        assert!(resolve_filter("info").is_err());
+    }
+}
