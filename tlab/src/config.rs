@@ -85,9 +85,10 @@ pub struct FileTraceConfig {
 
 #[cfg(test)]
 mod tests {
-    use std::{ffi::OsString, fs, time::SystemTime};
+    use std::{fs, time::SystemTime};
 
     use super::*;
+    use crate::test_support::{EnvironmentVariable, environment_lock};
 
     fn config_path(extension: &str) -> PathBuf {
         let timestamp = SystemTime::now()
@@ -99,33 +100,6 @@ mod tests {
             "tlab-config-{}-{timestamp}.{extension}",
             std::process::id()
         ))
-    }
-
-    struct EnvironmentVariable {
-        name: String,
-        previous: Option<OsString>,
-    }
-
-    impl EnvironmentVariable {
-        fn set(name: String, value: &str) -> Self {
-            let previous = std::env::var_os(&name);
-            unsafe {
-                std::env::set_var(&name, value);
-            }
-            Self { name, previous }
-        }
-    }
-
-    impl Drop for EnvironmentVariable {
-        fn drop(&mut self) {
-            unsafe {
-                if let Some(value) = &self.previous {
-                    std::env::set_var(&self.name, value);
-                } else {
-                    std::env::remove_var(&self.name);
-                }
-            }
-        }
     }
 
     #[test]
@@ -149,6 +123,7 @@ mod tests {
 
     #[test]
     fn loads_values_from_environment_prefix() {
+        let _lock = environment_lock().lock().unwrap();
         let prefix = format!("TLAB_CONFIG_TEST_{}", std::process::id());
         let key = format!("{prefix}_TRACING__CONSOLE__FILTER");
         let _filter = EnvironmentVariable::set(key, "debug");
