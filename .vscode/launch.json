@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug tlab-cli",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": ["build", "--package", "tlab-cli"],
+        "filter": {
+          "name": "tlab-cli",
+          "kind": "bin"
+        }
+      },
+      "args": ["--config", "${workspaceFolder}/tlab-cli/config.yml"],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

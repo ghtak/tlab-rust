@@ -1,0 +1,12 @@
+tracing:
+  console:
+    filter: info
+    buffered_lines_limit: 100
+    lossy: true
+    ansi: false
+  file:
+    directory: logs
+    filename: tlab.log
+    filter: warn
+    buffered_lines_limit: 200
+    lossy: false
