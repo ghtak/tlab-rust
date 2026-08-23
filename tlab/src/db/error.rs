@@ -1,25 +1,50 @@
-pub fn map_error(e: sqlx::Error) -> crate::Error {
-    crate::Error::DatabaseError(anyhow::Error::new(e))
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("unique constraint violation")]
+    UniqueViolation {
+        #[source]
+        source: anyhow::Error,
+    },
+
+    #[error("database operation failed")]
+    Driver {
+        #[source]
+        source: anyhow::Error,
+    },
 }
 
-#[allow(dead_code)]
-pub trait DatabaseErrorExt {
-    fn is_unique_violation(&self) -> bool;
+pub fn map_sqlx_error(error: sqlx::Error) -> Error {
+    let is_unique_violation = matches!(
+        &error,
+        sqlx::Error::Database(database_error) if is_unique_violation(database_error.as_ref())
+    );
+    let source = anyhow::Error::new(error);
+
+    if is_unique_violation {
+        Error::UniqueViolation { source }
+    } else {
+        Error::Driver { source }
+    }
 }
 
-impl DatabaseErrorExt for crate::Error {
-    fn is_unique_violation(&self) -> bool {
-        match self {
-            crate::Error::DatabaseError(err) => match err.downcast_ref::<sqlx::Error>() {
-                Some(sqlx::Error::Database(db_err)) => match db_err.code().as_deref() {
-                    Some("23505") => true,
-                    Some("23000") if db_err.message().contains("Duplicate entry") => true,
-                    Some("2067") if db_err.message().contains("UNIQUE constraint failed") => true,
-                    _ => false,
-                },
-                _ => false,
-            },
-            _ => false,
-        }
+fn is_unique_violation(error: &(dyn sqlx::error::DatabaseError + 'static)) -> bool {
+    match error.code().as_deref() {
+        Some("23505") => true,
+        Some("1062") | Some("23000") if error.message().contains("Duplicate entry") => true,
+        Some("2067") | Some("1555") if error.message().contains("UNIQUE constraint failed") => true,
+        _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn maps_non_database_sqlx_errors_to_driver_errors() {
+        let error = map_sqlx_error(sqlx::Error::PoolTimedOut);
+
+        assert!(matches!(error, Error::Driver { .. }));
+        assert!(std::error::Error::source(&error).is_some());
     }
 }

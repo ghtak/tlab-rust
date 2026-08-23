@@ -5,8 +5,8 @@ pub enum Error {
     #[error("internal error: {0}")]
     Internal(#[from] anyhow::Error),
 
-    #[error("database error: {0}")]
-    DatabaseError(anyhow::Error),
+    #[error(transparent)]
+    Database(#[from] crate::db::Error),
 }
 
 pub type Result<T> = core::result::Result<T, Error>;

@@ -2,7 +2,7 @@ use futures_core::{future::BoxFuture, stream::BoxStream};
 
 use sqlx::{Acquire, SqlStr};
 
-use crate::db::map_error;
+use crate::db::map_sqlx_error;
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -36,14 +36,17 @@ where
             SqlxSession::Tx(tx) => tx.begin().await,
             SqlxSession::Conn(conn) => conn.begin().await,
         }
-        .map_err(map_error)?;
+        .map_err(map_sqlx_error)?;
         Ok(SqlxSession::Tx(tx))
     }
 
     pub async fn commit(self) -> crate::Result<()> {
         match self {
             SqlxSession::Pool(_) => Ok(()),
-            SqlxSession::Tx(tx) => tx.commit().await.map_err(map_error),
+            SqlxSession::Tx(tx) => {
+                tx.commit().await.map_err(map_sqlx_error)?;
+                Ok(())
+            }
             SqlxSession::Conn(_) => Ok(()),
         }
     }
@@ -51,7 +54,10 @@ where
     pub async fn rollback(self) -> crate::Result<()> {
         match self {
             SqlxSession::Pool(_) => Ok(()),
-            SqlxSession::Tx(tx) => tx.rollback().await.map_err(map_error),
+            SqlxSession::Tx(tx) => {
+                tx.rollback().await.map_err(map_sqlx_error)?;
+                Ok(())
+            }
             SqlxSession::Conn(_) => Ok(()),
         }
     }

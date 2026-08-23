@@ -11,7 +11,7 @@ impl<DB: sqlx::Database> SqlxDatabase<DB> {
             .max_connections(config.max_connections)
             .connect(&config.url)
             .await
-            .map_err(db::map_error)?;
+            .map_err(db::map_sqlx_error)?;
         Ok(Self { inner })
     }
 
@@ -26,7 +26,7 @@ impl<DB: sqlx::Database> SqlxDatabase<DB> {
     where
         for<'e> &'e mut <DB as sqlx::Database>::Connection: sqlx::Executor<'e, Database = DB>,
     {
-        let tx = self.inner.begin().await.map_err(db::map_error)?;
+        let tx = self.inner.begin().await.map_err(db::map_sqlx_error)?;
         Ok(SqlxSession::Tx(tx))
     }
 
@@ -34,7 +34,7 @@ impl<DB: sqlx::Database> SqlxDatabase<DB> {
     where
         for<'e> &'e mut <DB as sqlx::Database>::Connection: sqlx::Executor<'e, Database = DB>,
     {
-        let conn = self.inner.acquire().await.map_err(db::map_error)?;
+        let conn = self.inner.acquire().await.map_err(db::map_sqlx_error)?;
         Ok(SqlxSession::Conn(conn))
     }
 }
@@ -47,7 +47,7 @@ mod tests {
     type TestDbSession<'a> = SqlxSession<'a, sqlx::Sqlite>;
 
     async fn create_users_table(session: &mut TestDbSession<'_>) {
-        sqlx::query("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+        sqlx::query("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE)")
             .execute(session.backend())
             .await
             .unwrap();
@@ -66,6 +66,16 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(name, "alice");
+
+        let error = sqlx::query("INSERT INTO users (name) VALUES (?)")
+            .bind("alice")
+            .execute(session.backend())
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            crate::db::map_sqlx_error(error),
+            crate::db::Error::UniqueViolation { .. }
+        ));
 
         sqlx::query("UPDATE users SET name = ? WHERE id = ?")
             .bind("bob")
