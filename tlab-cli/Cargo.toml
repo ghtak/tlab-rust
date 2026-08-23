@@ -7,3 +7,4 @@ edition = "2024"
 tlab = { path = "../tlab" }
 anyhow = "1.0.104"
 tracing = "0.1.44"
+serde = { version = "1.0.229", features = ["derive"] }

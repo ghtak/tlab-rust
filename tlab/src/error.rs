@@ -4,6 +4,9 @@ use thiserror::Error;
 pub enum Error {
     #[error("internal error: {0}")]
     Internal(#[from] anyhow::Error),
+
+    #[error("database error: {0}")]
+    DatabaseError(anyhow::Error),
 }
 
 pub type Result<T> = core::result::Result<T, Error>;
@@ -25,6 +28,7 @@ mod tests {
             Error::Internal(e) => {
                 assert_eq!(format!("{e:#}"), "context: test");
             }
+            _ => unreachable!(),
         }
     }
 }

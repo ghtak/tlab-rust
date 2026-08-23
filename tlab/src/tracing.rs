@@ -1,16 +1,39 @@
 //! Process-wide tracing subscriber initialization.
 
-use std::sync::OnceLock;
+use std::{path::PathBuf, sync::OnceLock};
 
 use anyhow::Context;
+use serde::Deserialize;
 use tracing_appender::{non_blocking::WorkerGuard, rolling::daily};
 use tracing_subscriber::{
     EnvFilter, Layer, Registry, fmt, layer::SubscriberExt, util::SubscriberInitExt,
 };
 
-use crate::config::TracingConfig;
-
 static LOGGING_GUARDS: OnceLock<Vec<WorkerGuard>> = OnceLock::new();
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct Config {
+    pub console: Option<ConsoleTraceConfig>,
+    pub file: Option<FileTraceConfig>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ConsoleTraceConfig {
+    pub filter: String,
+    pub buffered_lines_limit: usize,
+    pub lossy: bool,
+    pub ansi: bool,
+}
+
+/// File tracing settings.
+#[derive(Debug, Clone, Deserialize)]
+pub struct FileTraceConfig {
+    pub directory: PathBuf,
+    pub filename: String,
+    pub filter: String,
+    pub buffered_lines_limit: usize,
+    pub lossy: bool,
+}
 
 /// Installs App's process-wide tracing subscriber.
 ///
@@ -18,7 +41,7 @@ static LOGGING_GUARDS: OnceLock<Vec<WorkerGuard>> = OnceLock::new();
 /// configured output. Otherwise each output's configured filter is used.
 /// Calling this more than once, or after another global subscriber has been
 /// installed, returns an error.
-pub fn initialize(tracing_config: &TracingConfig) -> crate::Result<()> {
+pub fn initialize(tracing_config: &Config) -> crate::Result<()> {
     if tracing_config.console.is_none() && tracing_config.file.is_none() {
         return Ok(());
     }
@@ -28,7 +51,7 @@ pub fn initialize(tracing_config: &TracingConfig) -> crate::Result<()> {
     let console_layer = tracing_config
         .console
         .as_ref()
-        .map(|config| -> anyhow::Result<_> {
+        .map(|config| -> crate::Result<_> {
             let (writer, guard) = tracing_appender::non_blocking::NonBlockingBuilder::default()
                 .buffered_lines_limit(config.buffered_lines_limit)
                 .lossy(config.lossy)
@@ -46,7 +69,7 @@ pub fn initialize(tracing_config: &TracingConfig) -> crate::Result<()> {
     let file_layer = tracing_config
         .file
         .as_ref()
-        .map(|config| -> anyhow::Result<_> {
+        .map(|config| -> crate::Result<_> {
             std::fs::create_dir_all(&config.directory).with_context(|| {
                 format!(
                     "failed to create log directory `{}`",
@@ -78,12 +101,15 @@ pub fn initialize(tracing_config: &TracingConfig) -> crate::Result<()> {
     Ok(())
 }
 
-fn resolve_filter(configured_filter: &str) -> anyhow::Result<EnvFilter> {
+fn resolve_filter(configured_filter: &str) -> crate::Result<EnvFilter> {
     if std::env::var_os(EnvFilter::DEFAULT_ENV).is_some() {
-        EnvFilter::try_from_default_env().context("invalid RUST_LOG filter")
+        EnvFilter::try_from_default_env()
+            .context("invalid RUST_LOG filter")
+            .map_err(crate::Error::Internal)
     } else {
         EnvFilter::try_new(configured_filter)
             .with_context(|| format!("invalid tracing filter `{configured_filter}`"))
+            .map_err(crate::Error::Internal)
     }
 }
 
@@ -91,20 +117,20 @@ fn resolve_filter(configured_filter: &str) -> anyhow::Result<EnvFilter> {
 mod tests {
     use super::*;
     use crate::{
-        config::ConsoleTraceConfig,
         test_support::{EnvironmentVariable, environment_lock},
+        tracing::ConsoleTraceConfig,
     };
 
     #[test]
     fn initializes_without_outputs() {
-        initialize(&TracingConfig::default()).unwrap();
+        initialize(&Config::default()).unwrap();
     }
 
     #[test]
     fn rejects_invalid_configured_filter() {
         let _lock = environment_lock().lock().unwrap();
         let _rust_log = EnvironmentVariable::remove(EnvFilter::DEFAULT_ENV);
-        let config = TracingConfig {
+        let config = Config {
             console: Some(ConsoleTraceConfig {
                 filter: "[".into(),
                 buffered_lines_limit: 1,

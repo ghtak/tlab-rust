@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::Context;
-use serde::{Deserialize, de::DeserializeOwned};
+use serde::de::DeserializeOwned;
 
 pub struct Loader {
     file: Option<PathBuf>,
@@ -52,35 +52,6 @@ impl Loader {
             .context("failed to deserialize config")
             .map_err(crate::Error::Internal)
     }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct TlabConfig {
-    pub tracing: TracingConfig,
-}
-
-#[derive(Debug, Clone, Default, Deserialize)]
-pub struct TracingConfig {
-    pub console: Option<ConsoleTraceConfig>,
-    pub file: Option<FileTraceConfig>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct ConsoleTraceConfig {
-    pub filter: String,
-    pub buffered_lines_limit: usize,
-    pub lossy: bool,
-    pub ansi: bool,
-}
-
-/// File tracing settings.
-#[derive(Debug, Clone, Deserialize)]
-pub struct FileTraceConfig {
-    pub directory: PathBuf,
-    pub filename: String,
-    pub filter: String,
-    pub buffered_lines_limit: usize,
-    pub lossy: bool,
 }
 
 #[cfg(test)]
@@ -164,7 +135,12 @@ tracing:
         )
         .unwrap();
 
-        let config: TlabConfig = Loader::from_file(path.clone()).try_deserialize().unwrap();
+        #[derive(Debug, Clone, serde::Deserialize)]
+        pub struct TestConfig {
+            pub tracing: crate::tracing::Config,
+        }
+
+        let config: TestConfig = Loader::from_file(path.clone()).try_deserialize().unwrap();
 
         let console = config.tracing.console.unwrap();
         assert_eq!(console.filter, "info");

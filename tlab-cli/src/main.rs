@@ -1,12 +1,19 @@
 use std::{ffi::OsString, path::PathBuf};
 
 use anyhow::{Context, bail};
+use serde::Deserialize;
 use tlab::config::Loader;
+use tlab::tracing::Config;
 use tracing::{error, info, warn};
+
+#[derive(Debug, Deserialize)]
+pub struct CliConfig {
+    pub tracing: Config,
+}
 
 fn main() -> anyhow::Result<()> {
     let config = Loader::from_file(config_path(std::env::args_os().skip(1))?)
-        .try_deserialize::<tlab::config::TlabConfig>()?;
+        .try_deserialize::<CliConfig>()?;
     println!("{:#?}", config);
 
     tlab::tracing::initialize(&config.tracing)?;
