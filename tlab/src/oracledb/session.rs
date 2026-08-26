@@ -36,6 +36,8 @@ impl Session<'static> {
 }
 
 impl Session<'_> {
+    /// DML must run in a transaction created with [`Self::begin`] and be committed explicitly.
+    /// Oracle connections do not auto-commit by default.
     pub fn backend(&mut self) -> &mut oracle_rs::Connection {
         &mut self.connection_mut().inner
     }

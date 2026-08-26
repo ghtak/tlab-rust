@@ -6,7 +6,7 @@ pub struct Database {
 }
 
 impl Database {
-    pub fn new(config: &oracledb::Config) -> crate::Result<Self> {
+    pub async fn new(config: &oracledb::Config) -> crate::Result<Self> {
         let oracle_config = oracle_rs::Config::new(
             &config.host,
             config.port,
@@ -18,6 +18,8 @@ impl Database {
             .max_size(config.max_connections)
             .build()
             .map_err(oracledb::map_error)?;
+
+        let _ = inner.get().await.map_err(oracledb::map_error)?;
 
         Ok(Self { inner })
     }
@@ -49,16 +51,18 @@ mod tests {
         format!("TLAB_TEST_{}_{timestamp}", std::process::id())
     }
 
-    #[test]
-    fn builds_a_database_pool() {
+    #[tokio::test]
+    #[ignore = "requires tests/docker-db-env Oracle service"]
+    async fn connects_while_building_a_database_pool() {
         let database = Database::new(&Config {
             host: "localhost".into(),
             port: 11521,
             service: "FREEPDB1".into(),
-            username: "system".into(),
-            password: "password".into(),
+            username: "tlab".into(),
+            password: "Tlab_123".into(),
             max_connections: 1,
         })
+        .await
         .unwrap();
 
         assert_eq!(database.inner.status().max_size, 1);
@@ -77,6 +81,7 @@ mod tests {
             password: "Tlab_123".into(),
             max_connections: 1,
         })
+        .await
         .unwrap();
         let mut session = database.session().await.unwrap();
 
