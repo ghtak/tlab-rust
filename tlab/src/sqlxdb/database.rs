@@ -15,7 +15,7 @@ impl<DB: sqlx::Database> Database<DB> {
         Ok(Self { inner })
     }
 
-    pub fn session(&self) -> Session<'_, DB> {
+    pub async fn session(&self) -> Session<'_, DB> {
         Session::Pool(self.inner.clone())
     }
 
@@ -98,7 +98,7 @@ mod tests {
         })
         .await
         .unwrap();
-        let mut session = database.session();
+        let mut session = database.session().await;
         let mut tx = session.begin().await.unwrap();
         create_users_table(&mut tx).await;
         runs_crud(&mut tx).await;
