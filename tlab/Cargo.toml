@@ -3,12 +3,19 @@ name = "tlab"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["sqlxdb"]
+sqlxdb = ["dep:futures-core", "dep:sqlx"]
+oracledb = ["dep:deadpool-oracle", "dep:oracle-rs"]
+
 [dependencies]
 anyhow = "1.0.104"
 config = "0.15.25"
-futures-core = "0.3.34"
+deadpool-oracle = { version = "0.1.1", optional = true }
+futures-core = { version = "0.3.34", optional = true }
+oracle-rs = { version = "0.1.7", optional = true }
 serde = { version = "1.0.229", features = ["derive"] }
-sqlx = { version = "0.9.0", features = [
+sqlx = { version = "0.9.0", optional = true, features = [
     "postgres",
     "runtime-tokio",
     "uuid",

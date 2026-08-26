@@ -1,50 +1,36 @@
-use crate::db::{self, SqlxSession};
+use crate::sqlxdb::{self, Session};
 
 #[derive(Debug)]
-pub struct SqlxDatabase<DB: sqlx::Database> {
+pub struct Database<DB: sqlx::Database> {
     pub inner: sqlx::Pool<DB>,
 }
 
-impl<DB: sqlx::Database> SqlxDatabase<DB> {
-    pub async fn new(config: &db::Config) -> crate::Result<Self> {
+impl<DB: sqlx::Database> Database<DB> {
+    pub async fn new(config: &sqlxdb::Config) -> crate::Result<Self> {
         let inner = sqlx::pool::PoolOptions::<DB>::new()
             .max_connections(config.max_connections)
             .connect(&config.url)
             .await
-            .map_err(db::map_sqlx_error)?;
+            .map_err(sqlxdb::map_error)?;
         Ok(Self { inner })
     }
 
-    pub fn pool(&self) -> SqlxSession<'_, DB>
-    where
-        for<'e> &'e mut <DB as sqlx::Database>::Connection: sqlx::Executor<'e, Database = DB>,
-    {
-        SqlxSession::Pool(self.inner.clone())
+    pub fn session(&self) -> Session<'_, DB> {
+        Session::Pool(self.inner.clone())
     }
 
-    pub async fn tx(&self) -> crate::Result<SqlxSession<'_, DB>>
-    where
-        for<'e> &'e mut <DB as sqlx::Database>::Connection: sqlx::Executor<'e, Database = DB>,
-    {
-        let tx = self.inner.begin().await.map_err(db::map_sqlx_error)?;
-        Ok(SqlxSession::Tx(tx))
-    }
-
-    pub async fn conn(&self) -> crate::Result<SqlxSession<'_, DB>>
-    where
-        for<'e> &'e mut <DB as sqlx::Database>::Connection: sqlx::Executor<'e, Database = DB>,
-    {
-        let conn = self.inner.acquire().await.map_err(db::map_sqlx_error)?;
-        Ok(SqlxSession::Conn(conn))
+    pub async fn connection(&self) -> crate::Result<Session<'_, DB>> {
+        let conn = self.inner.acquire().await.map_err(sqlxdb::map_error)?;
+        Ok(Session::Conn(conn))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::Config;
+    use crate::sqlxdb::Config;
 
-    type TestDbSession<'a> = SqlxSession<'a, sqlx::Sqlite>;
+    type TestDbSession<'a> = Session<'a, sqlx::Sqlite>;
 
     async fn create_users_table(session: &mut TestDbSession<'_>) {
         sqlx::query("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE)")
@@ -73,7 +59,7 @@ mod tests {
             .await
             .unwrap_err();
         assert!(matches!(
-            crate::db::map_sqlx_error(error),
+            crate::sqlxdb::map_error(error),
             crate::db::Error::UniqueViolation { .. }
         ));
 
@@ -106,15 +92,15 @@ mod tests {
 
     #[tokio::test]
     async fn runs_ddl_and_crud_with_sqlite_in_memory() {
-        let database = SqlxDatabase::<sqlx::Sqlite>::new(&Config {
+        let database = Database::<sqlx::Sqlite>::new(&Config {
             url: "sqlite::memory:".into(),
             max_connections: 1,
         })
         .await
         .unwrap();
-        let mut session = database.pool();
-
-        create_users_table(&mut session).await;
-        runs_crud(&mut session).await;
+        let mut session = database.session();
+        let mut tx = session.begin().await.unwrap();
+        create_users_table(&mut tx).await;
+        runs_crud(&mut tx).await;
     }
 }

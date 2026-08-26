@@ -1,0 +1,28 @@
+services:
+  oracle:
+    image: gvenzl/oracle-free:23-slim-faststart
+    ports:
+      - "11521:1521"
+    environment:
+      ORACLE_PASSWORD: Oracle_123
+      APP_USER: tlab
+      APP_USER_PASSWORD: Tlab_123
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  postgres:
+    image: postgres:17-alpine
+    ports:
+      - "15432:5432"
+    environment:
+      POSTGRES_DB: tlab
+      POSTGRES_USER: tlab
+      POSTGRES_PASSWORD: tlab
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tlab -d tlab"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
