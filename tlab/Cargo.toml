@@ -4,9 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = ["sqlxdb"]
+default = ["sqlxdb", "oraclersdb", "oracledb"]
 sqlxdb = ["dep:futures-core", "dep:sqlx"]
-oracledb = ["dep:deadpool-oracle", "dep:oracle-rs"]
+oraclersdb = ["dep:deadpool-oracle", "dep:oracle-rs"]
+oracledb = ["dep:oracledb"]
 
 [dependencies]
 anyhow = "1.0.104"
@@ -14,6 +15,7 @@ config = "0.15.25"
 deadpool-oracle = { version = "0.1.1", optional = true }
 futures-core = { version = "0.3.34", optional = true }
 oracle-rs = { version = "0.1.7", optional = true }
+oracledb = { version = "26.0.0-beta.2", optional = true }
 serde = { version = "1.0.229", features = ["derive"] }
 sqlx = { version = "0.9.0", optional = true, features = [
     "postgres",
@@ -25,9 +27,9 @@ sqlx = { version = "0.9.0", optional = true, features = [
     "mysql",
 ] }
 thiserror = "2.0.20"
+tokio = { version = "1.53.1", features = ["full"] }
 tracing = "0.1.44"
 tracing-appender = "0.2.5"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 
 [dev-dependencies]
-tokio = { version = "1.53.1", features = ["macros", "rt"] }

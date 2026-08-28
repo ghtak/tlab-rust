@@ -5,8 +5,11 @@ pub enum Error {
     #[error("internal error: {0}")]
     Internal(#[from] anyhow::Error),
 
-    #[error(transparent)]
-    Database(#[from] crate::db::Error),
+    #[error("db driver error: {source}")]
+    DbDriver {
+        #[source]
+        source: anyhow::Error,
+    },
 }
 
 pub type Result<T> = core::result::Result<T, Error>;
