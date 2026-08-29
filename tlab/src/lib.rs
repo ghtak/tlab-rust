@@ -8,6 +8,6 @@ pub mod tracing;
 pub use error::*;
 
 #[cfg(test)]
-mod benchmarks;
+mod test_benchmarks;
 #[cfg(test)]
 mod test_support;
