@@ -1,4 +1,14 @@
 services:
+  valkey:
+    image: valkey/valkey:8-alpine
+    ports:
+      - "16379:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
   oracle:
     image: gvenzl/oracle-free:23-slim-faststart
     ports:
