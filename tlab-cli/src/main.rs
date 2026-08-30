@@ -3,24 +3,39 @@ use std::{ffi::OsString, path::PathBuf};
 use anyhow::{Context, bail};
 use serde::Deserialize;
 use tlab::config::Loader;
-use tlab::tracing::Config;
-use tracing::{error, info, warn};
 
 #[derive(Debug, Deserialize)]
 pub struct CliConfig {
-    pub tracing: Config,
+    pub tracing: tlab::tracing::Config,
+    pub http: tlab::http::Config,
 }
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let config = Loader::from_file(config_path(std::env::args_os().skip(1))?)
         .try_deserialize::<CliConfig>()?;
     println!("{:#?}", config);
 
     tlab::tracing::initialize(&config.tracing)?;
 
-    info!("Hello, world!");
-    warn!("This is a warning");
-    error!("This is an error");
+    // generate cert
+    if let Some(tls_certificate_files) = &config.http.tls_certificate_files {
+        if !std::path::Path::new(&tls_certificate_files.cert).exists()
+            || !std::path::Path::new(&tls_certificate_files.key).exists()
+        {
+            let subject_alt_names = vec![config.http.host.clone()];
+            tlab::cert::generate_self_signed_certificate(
+                &subject_alt_names,
+                tls_certificate_files.clone(),
+            )?;
+            println!("Certificate generated at {:?}", tls_certificate_files);
+        }
+    }
+
+    let http_server = tlab::http::HttpServer::new(config.http);
+    http_server
+        .run_https(axum::Router::new().route("/", axum::routing::get(|| async { "Hello, world!" })))
+        .await?;
 
     Ok(())
 }

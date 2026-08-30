@@ -8,3 +8,5 @@ tlab = { path = "../tlab" }
 anyhow = "1.0.104"
 tracing = "0.1.44"
 serde = { version = "1.0.229", features = ["derive"] }
+axum = "0.8.9"
+tokio = { version = "1.53.1", features = ["full"] }

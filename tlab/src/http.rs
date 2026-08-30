@@ -8,10 +8,10 @@ use tracing::info;
 pub struct Config {
     pub host: String,
     pub port: u16,
-    pub tls: Option<TlsCertificateFiles>,
+    pub tls_certificate_files: Option<TlsCertificateFiles>,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, Clone)]
 pub struct TlsCertificateFiles {
     pub cert: String,
     pub key: String,
@@ -48,7 +48,7 @@ impl HttpServer {
     }
 
     pub async fn run_https(&self, app: axum::Router) -> crate::Result<()> {
-        let tls = self.load_tls_config().await?;
+        let tls_config = self.load_tls_config().await?;
         let listener = self.listener().await?;
         let address = listener
             .local_addr()
@@ -67,7 +67,7 @@ impl HttpServer {
             listener
                 .into_std()
                 .context("failed to convert HTTPS listener for TLS serving")?,
-            tls.clone(),
+            tls_config.clone(),
         )
         .context("failed to configure HTTPS server")?
         .handle(handle)
@@ -93,7 +93,7 @@ impl HttpServer {
     }
 
     async fn load_tls_config(&self) -> crate::Result<&axum_server::tls_rustls::RustlsConfig> {
-        let Some(tls_certificate_files) = self.config.tls.as_ref() else {
+        let Some(tls_certificate_files) = self.config.tls_certificate_files.as_ref() else {
             return Err(
                 anyhow::anyhow!("TLS configuration is required to run an HTTPS server").into(),
             );
@@ -163,11 +163,11 @@ async fn shutdown_signal() {
 mod tests {
     use super::*;
 
-    fn config(tls: Option<TlsCertificateFiles>) -> Config {
+    fn config(tls_certificate_files: Option<TlsCertificateFiles>) -> Config {
         Config {
             host: "127.0.0.1".to_owned(),
             port: 0,
-            tls,
+            tls_certificate_files,
         }
     }
 
