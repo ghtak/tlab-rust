@@ -12,6 +12,8 @@ oracledb = ["dep:oracledb"]
 
 [dependencies]
 anyhow = "1.0.104"
+axum = "0.8.9"
+axum-server = { version = "0.8.0", features = ["tls-rustls-no-provider"] }
 config = "0.15.25"
 deadpool-oracle = { version = "0.1.1", optional = true }
 deadpool-redis = { version = "0.23.0", optional = true }

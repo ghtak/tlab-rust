@@ -1,6 +1,7 @@
 pub mod cachedb;
 pub mod config;
 mod error;
+pub mod http;
 pub mod oracledb;
 pub mod oraclersdb;
 pub mod sqlxdb;
