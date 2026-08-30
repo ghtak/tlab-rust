@@ -1,23 +1,48 @@
-use std::{ffi::OsString, path::PathBuf};
+use std::{ffi::OsString, path::PathBuf, sync::Arc};
 
 use anyhow::{Context, bail};
 use serde::Deserialize;
 use tlab::config::Loader;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct CliConfig {
     pub tracing: tlab::tracing::Config,
     pub http: tlab::http::Config,
+}
+
+pub struct CliContainer {
+    pub config: CliConfig,
+    pub http_server: tlab::http::HttpServer,
+}
+
+impl CliContainer {
+    pub fn new(config: CliConfig) -> Self {
+        Self {
+            config: config.clone(),
+            http_server: tlab::http::HttpServer::new(config.http.clone()),
+        }
+    }
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let config = Loader::from_file(config_path(std::env::args_os().skip(1))?)
         .try_deserialize::<CliConfig>()?;
-    println!("{:#?}", config);
-
     tlab::tracing::initialize(&config.tracing)?;
+    generate_self_signed_certificate_if_not_exist(&config)?;
 
+    let container = Arc::new(CliContainer::new(config));
+
+    let router = axum::Router::new()
+        .route("/", axum::routing::get(|| async { "Hello, world!" }))
+        .with_state(container.clone());
+
+    container.http_server.run_https(router).await?;
+
+    Ok(())
+}
+
+fn generate_self_signed_certificate_if_not_exist(config: &CliConfig) -> anyhow::Result<()> {
     // generate cert
     if let Some(tls_certificate_files) = &config.http.tls_certificate_files {
         if !std::path::Path::new(&tls_certificate_files.cert).exists()
@@ -28,15 +53,9 @@ async fn main() -> anyhow::Result<()> {
                 &subject_alt_names,
                 tls_certificate_files.clone(),
             )?;
-            println!("Certificate generated at {:?}", tls_certificate_files);
+            tracing::info!("Certificate generated at {:?}", tls_certificate_files);
         }
     }
-
-    let http_server = tlab::http::HttpServer::new(config.http);
-    http_server
-        .run_https(axum::Router::new().route("/", axum::routing::get(|| async { "Hello, world!" })))
-        .await?;
-
     Ok(())
 }
 

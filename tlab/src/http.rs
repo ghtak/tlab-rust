@@ -4,7 +4,7 @@ use anyhow::Context;
 
 use tracing::info;
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize)]
 pub struct Config {
     pub host: String,
     pub port: u16,

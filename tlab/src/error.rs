@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -13,6 +15,9 @@ pub enum Error {
 
     #[error("I/O error: {0}")]
     IoError(#[from] std::io::Error),
+
+    #[error("Conflict {0}")]
+    Conflict(Cow<'static, str>),
 }
 
 pub type Result<T> = core::result::Result<T, Error>;
