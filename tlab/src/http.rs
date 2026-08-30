@@ -116,11 +116,12 @@ impl HttpServer {
         &self,
         tls_certificate_files: &TlsCertificateFiles,
     ) -> crate::Result<()> {
-        let Some(tls) = self.tls_config.get() else {
+        let Some(tls_config) = self.tls_config.get() else {
             return Err(anyhow::anyhow!("TLS configuration has not been initialized").into());
         };
 
-        tls.reload_from_pem_file(&tls_certificate_files.cert, &tls_certificate_files.key)
+        tls_config
+            .reload_from_pem_file(&tls_certificate_files.cert, &tls_certificate_files.key)
             .await
             .context("failed to reload TLS certificate and key")?;
 
