@@ -10,6 +10,9 @@ pub enum Error {
         #[source]
         source: anyhow::Error,
     },
+
+    #[error("I/O error: {0}")]
+    IoError(#[from] std::io::Error),
 }
 
 pub type Result<T> = core::result::Result<T, Error>;

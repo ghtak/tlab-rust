@@ -1,4 +1,5 @@
 pub mod cachedb;
+pub mod cert;
 pub mod config;
 mod error;
 pub mod http;
