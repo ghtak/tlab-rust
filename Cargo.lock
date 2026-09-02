@@ -2846,6 +2846,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tlab-boilerplate"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "serde",
+ "tlab",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "tlab-cli"
 version = "0.1.0"
 dependencies = [
