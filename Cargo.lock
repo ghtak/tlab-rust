@@ -2858,18 +2858,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tlab-cli"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum",
- "serde",
- "tlab",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "tokio"
 version = "1.53.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
