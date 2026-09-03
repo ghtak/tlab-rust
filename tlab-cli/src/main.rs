@@ -8,18 +8,19 @@ use tlab::config::Loader;
 pub struct CliConfig {
     pub tracing: tlab::tracing::Config,
     pub http: tlab::http::Config,
+    pub tls_certificate_files: tlab::cert::TlsCertificateFiles,
 }
 
 pub struct CliContainer {
     pub config: CliConfig,
-    pub http_server: tlab::http::HttpServer,
+    pub http_server: tlab::http::Server,
 }
 
 impl CliContainer {
     pub fn new(config: CliConfig) -> Self {
         Self {
             config: config.clone(),
-            http_server: tlab::http::HttpServer::new(config.http.clone()),
+            http_server: tlab::http::Server::new(config.http.clone()),
         }
     }
 }
@@ -37,24 +38,21 @@ async fn main() -> anyhow::Result<()> {
         .route("/", axum::routing::get(|| async { "Hello, world!" }))
         .with_state(container.clone());
 
-    container.http_server.run_https(router).await?;
+    container
+        .http_server
+        .run_https(router, &container.config.tls_certificate_files)
+        .await?;
 
     Ok(())
 }
 
 fn generate_self_signed_certificate_if_not_exist(config: &CliConfig) -> anyhow::Result<()> {
     // generate cert
-    if let Some(tls_certificate_files) = &config.http.tls_certificate_files {
-        if !std::path::Path::new(&tls_certificate_files.cert).exists()
-            || !std::path::Path::new(&tls_certificate_files.key).exists()
-        {
-            let subject_alt_names = vec![config.http.host.clone()];
-            tlab::cert::generate_self_signed_certificate(
-                &subject_alt_names,
-                tls_certificate_files.clone(),
-            )?;
-            tracing::info!("Certificate generated at {:?}", tls_certificate_files);
-        }
+    let tls_certificate_files = &config.tls_certificate_files;
+    if !tls_certificate_files.exists() {
+        let subject_alt_names = vec![config.http.host.clone()];
+        tls_certificate_files.generate_self_signed_certificate(&subject_alt_names)?;
+        tracing::info!("Certificate generated at {:?}", tls_certificate_files);
     }
     Ok(())
 }

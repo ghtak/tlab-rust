@@ -18,6 +18,9 @@ pub enum Error {
 
     #[error("Conflict {0}")]
     Conflict(Cow<'static, str>),
+
+    #[error("Illegal state {0}")]
+    IllegalState(Cow<'static, str>),
 }
 
 pub type Result<T> = core::result::Result<T, Error>;

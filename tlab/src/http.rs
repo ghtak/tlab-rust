@@ -4,25 +4,20 @@ use anyhow::Context;
 
 use tracing::info;
 
+pub use crate::cert::TlsCertificateFiles;
+
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct Config {
     pub host: String,
     pub port: u16,
-    pub tls_certificate_files: Option<TlsCertificateFiles>,
 }
 
-#[derive(Debug, serde::Deserialize, Clone)]
-pub struct TlsCertificateFiles {
-    pub cert: String,
-    pub key: String,
-}
-
-pub struct HttpServer {
+pub struct Server {
     config: Config,
     tls_config: tokio::sync::OnceCell<axum_server::tls_rustls::RustlsConfig>,
 }
 
-impl HttpServer {
+impl Server {
     pub fn new(config: Config) -> Self {
         Self {
             config,
@@ -47,8 +42,12 @@ impl HttpServer {
         Ok(())
     }
 
-    pub async fn run_https(&self, app: axum::Router) -> crate::Result<()> {
-        let tls_config = self.load_tls_config().await?;
+    pub async fn run_https(
+        &self,
+        app: axum::Router,
+        tls_certificate_files: &TlsCertificateFiles,
+    ) -> crate::Result<()> {
+        let tls_config = self.load_tls_config(tls_certificate_files).await?;
         let listener = self.listener().await?;
         let address = listener
             .local_addr()
@@ -92,13 +91,10 @@ impl HttpServer {
         Ok(listener)
     }
 
-    async fn load_tls_config(&self) -> crate::Result<&axum_server::tls_rustls::RustlsConfig> {
-        let Some(tls_certificate_files) = self.config.tls_certificate_files.as_ref() else {
-            return Err(
-                anyhow::anyhow!("TLS configuration is required to run an HTTPS server").into(),
-            );
-        };
-
+    async fn load_tls_config(
+        &self,
+        tls_certificate_files: &TlsCertificateFiles,
+    ) -> crate::Result<&axum_server::tls_rustls::RustlsConfig> {
         self.tls_config
             .get_or_try_init(|| async {
                 axum_server::tls_rustls::RustlsConfig::from_pem_file(
@@ -164,17 +160,16 @@ async fn shutdown_signal() {
 mod tests {
     use super::*;
 
-    fn config(tls_certificate_files: Option<TlsCertificateFiles>) -> Config {
+    fn config() -> Config {
         Config {
             host: "127.0.0.1".to_owned(),
             port: 0,
-            tls_certificate_files,
         }
     }
 
     #[tokio::test]
     async fn http_can_bind_without_tls() {
-        let server = HttpServer::new(config(None));
+        let server = Server::new(config());
 
         let listener = server.listener().await.unwrap();
 
@@ -182,20 +177,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn https_requires_tls_configuration() {
-        let server = HttpServer::new(config(None));
-
-        let error = server.run_https(axum::Router::new()).await.unwrap_err();
-
-        assert_eq!(
-            error.to_string(),
-            "internal error: TLS configuration is required to run an HTTPS server"
-        );
-    }
-
-    #[tokio::test]
     async fn reloading_uninitialized_tls_config_fails() {
-        let server = HttpServer::new(config(None));
+        let server = Server::new(config());
         let tls_certificate_files = TlsCertificateFiles {
             cert: "cert.pem".to_owned(),
             key: "key.pem".to_owned(),

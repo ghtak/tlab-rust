@@ -14,6 +14,7 @@ tracing:
 http:
   host: "0.0.0.0"
   port: 13000
-  tls_certificate_files:
-    cert: "cert.pem"
-    key: "key.pem"
+
+tls_certificate_files:
+  cert: "cert.pem"
+  key: "key.pem"
