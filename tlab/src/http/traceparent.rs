@@ -2,7 +2,7 @@ use tracing::info_span;
 use tracing_subscriber::registry::LookupSpan;
 
 const TRACEPARENT_VERSION: &str = "00";
-const ROOT_PARENT_SPAN_ID: &str = "0000000000000000";
+const ROOT_SPAN_ID: &str = "0000000000000000";
 
 /// Parses a version 00 W3C `traceparent` header as `(trace_id, parent_span_id)`.
 fn parse_traceparent(value: &str) -> Option<(String, String)> {
@@ -41,21 +41,16 @@ fn new_span_id() -> String {
 pub fn new_http_request_span<B>(req: &axum::http::Request<B>) -> tracing::Span {
     let headers = req.headers();
 
-    // Header에서 traceparent 추출
     let (trace_id, parent_span_id) = headers
         .get("traceparent")
         .and_then(|v| v.to_str().ok())
         .and_then(parse_traceparent)
         .unwrap_or_else(|| {
-            // 헤더가 없으면 새로 생성 (최초 진입점)
-            let new_trace_id = uuid::Uuid::new_v4().simple().to_string(); // 32자리 hex
-            (new_trace_id, ROOT_PARENT_SPAN_ID.to_owned())
+            (uuid::Uuid::new_v4().simple().to_string(), ROOT_SPAN_ID.to_owned())
         });
 
-    // 수신 시점에 "나의 새로운 Span ID" 생성 (16자리 hex)
     let span_id = new_span_id();
 
-    // tracing::Span 생성 및 필드 바인딩
     let span = info_span!(
         "http_request",
         method = %req.method(),
@@ -140,7 +135,7 @@ mod tests {
     #[test]
     fn test_new_span() {
         let subscriber = tracing_subscriber::fmt()
-            .json()
+            .compact()
             .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
             .with_test_writer()
             .finish();
