@@ -38,6 +38,13 @@ fn new_span_id() -> String {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TraceparentData {
+    pub trace_id: String,
+    pub span_id: String,
+}
+
+
 pub fn new_http_request_span<B>(req: &axum::http::Request<B>) -> tracing::Span {
     let headers = req.headers();
 
@@ -64,8 +71,6 @@ pub fn new_http_request_span<B>(req: &axum::http::Request<B>) -> tracing::Span {
         if let Some(registry) = subscriber.downcast_ref::<tracing_subscriber::Registry>() {
             if let Some(span_ref) = registry.span(id) {
                 let mut extensions = span_ref.extensions_mut();
-
-                // 나만의 컨텍스트 구조체를 만들어 주입 [1]
                 extensions.insert(TraceparentData {
                     trace_id: trace_id.clone(),
                     span_id: span_id.clone(),
@@ -76,11 +81,6 @@ pub fn new_http_request_span<B>(req: &axum::http::Request<B>) -> tracing::Span {
     span
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TraceparentData {
-    pub trace_id: String,
-    pub span_id: String,
-}
 
 pub fn get_current_traceparent() -> Option<TraceparentData> {
     tracing::Span::current()
