@@ -14,10 +14,19 @@ pub struct AppResponse<T: Serialize> {
 }
 
 impl<T: Serialize> AppResponse<T> {
-    pub fn new(status_code: axum::http::StatusCode, data: Option<T>) -> Self {
+
+    pub fn code(status_code: axum::http::StatusCode) -> Self {
         Self {
             status_code,
-            data,
+            data: None,
+            error: None,
+        }
+    }
+
+    pub fn data(status_code: axum::http::StatusCode, data: T) -> Self {
+        Self {
+            status_code,
+            data: Some(data),
             error: None,
         }
     }
@@ -45,8 +54,18 @@ mod tests {
     use super::AppResponse;
 
     #[test]
+    fn serializes_success_without_status_or_error() {
+        let response = AppResponse::<()>::code(StatusCode::OK);
+
+        assert_eq!(
+            serde_json::to_value(response).unwrap(),
+            json!({})
+        );
+    }
+
+    #[test]
     fn serializes_success_data_without_status_or_error() {
-        let response = AppResponse::new(StatusCode::OK, Some(json!({ "id": "order-1" })));
+        let response = AppResponse::data(StatusCode::OK, json!({ "id": "order-1" }));
 
         assert_eq!(
             serde_json::to_value(response).unwrap(),
