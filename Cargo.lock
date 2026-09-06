@@ -2872,6 +2872,7 @@ dependencies = [
  "anyhow",
  "axum",
  "serde",
+ "serde_json",
  "tlab",
  "tokio",
  "tower-http",
