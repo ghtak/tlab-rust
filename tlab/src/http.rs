@@ -1,4 +1,4 @@
-pub mod traceparent;
+pub mod trace;
 
 use std::path::PathBuf;
 use std::time::Duration;

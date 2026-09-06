@@ -39,7 +39,7 @@ async fn main() -> tlab::Result<()> {
         .fallback_service(handle_404.into_service())
         .layer(
             tower_http::trace::TraceLayer::new_for_http()
-                .make_span_with(tlab::http::traceparent::new_http_request_span),
+                .make_span_with(tlab::http::trace::new_request_span),
         )
         .with_state(container.clone());
 

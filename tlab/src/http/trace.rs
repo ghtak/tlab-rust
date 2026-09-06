@@ -44,7 +44,7 @@ pub struct TraceparentData {
     pub span_id: String,
 }
 
-pub fn new_http_request_span<B>(req: &axum::http::Request<B>) -> tracing::Span {
+pub fn new_request_span<B>(req: &axum::http::Request<B>) -> tracing::Span {
     let headers = req.headers();
 
     let (trace_id, parent_span_id) = headers
@@ -159,7 +159,7 @@ mod tests {
                                 "Hello, world!"
                             }),
                         )
-                        .layer(TraceLayer::new_for_http().make_span_with(new_http_request_span));
+                        .layer(TraceLayer::new_for_http().make_span_with(new_request_span));
 
                     let response = app
                         .oneshot(
