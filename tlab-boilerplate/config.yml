@@ -14,6 +14,9 @@ tracing:
 http:
   host: "0.0.0.0"
   port: 13000
+  # static_files:
+  #   directory: "static"
+  #   mount_path: "/static"
 
 tls_certificate_files:
   cert: "cert.pem"

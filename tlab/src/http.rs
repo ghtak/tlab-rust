@@ -1,5 +1,6 @@
 pub mod traceparent;
 
+use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -12,6 +13,37 @@ pub use crate::cert::TlsCertificateFiles;
 pub struct Config {
     pub host: String,
     pub port: u16,
+    pub static_files: Option<StaticFilesConfig>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct StaticFilesConfig {
+    pub directory: PathBuf,
+    pub mount_path: String,
+}
+
+impl StaticFilesConfig {
+    pub fn validate(&self) -> crate::Result<()> {
+        if !self.directory.is_dir() {
+            return Err(anyhow::anyhow!(
+                "static files directory does not exist or is not a directory: {}",
+                self.directory.display()
+            )
+            .into());
+        }
+        if !self.mount_path.starts_with('/')
+            || self.mount_path == "/"
+            || self.mount_path.ends_with('/')
+        {
+            return Err(anyhow::anyhow!(
+                "static files mount path must start with '/', and must not be '/' or end with '/': {}",
+                self.mount_path
+            )
+            .into());
+        }
+
+        Ok(())
+    }
 }
 
 pub struct Server {
@@ -166,6 +198,7 @@ mod tests {
         Config {
             host: "127.0.0.1".to_owned(),
             port: 0,
+            static_files: None,
         }
     }
 
@@ -195,5 +228,15 @@ mod tests {
             error.to_string(),
             "internal error: TLS configuration has not been initialized"
         );
+    }
+
+    #[test]
+    fn static_files_config_rejects_an_invalid_mount_path() {
+        let config = StaticFilesConfig {
+            directory: PathBuf::from("."),
+            mount_path: "/".to_owned(),
+        };
+
+        assert!(config.validate().is_err());
     }
 }
