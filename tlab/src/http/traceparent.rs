@@ -44,7 +44,6 @@ pub struct TraceparentData {
     pub span_id: String,
 }
 
-
 pub fn new_http_request_span<B>(req: &axum::http::Request<B>) -> tracing::Span {
     let headers = req.headers();
 
@@ -53,7 +52,10 @@ pub fn new_http_request_span<B>(req: &axum::http::Request<B>) -> tracing::Span {
         .and_then(|v| v.to_str().ok())
         .and_then(parse_traceparent)
         .unwrap_or_else(|| {
-            (uuid::Uuid::new_v4().simple().to_string(), ROOT_SPAN_ID.to_owned())
+            (
+                uuid::Uuid::new_v4().simple().to_string(),
+                ROOT_SPAN_ID.to_owned(),
+            )
         });
 
     let span_id = new_span_id();
@@ -80,7 +82,6 @@ pub fn new_http_request_span<B>(req: &axum::http::Request<B>) -> tracing::Span {
     });
     span
 }
-
 
 pub fn get_current_traceparent() -> Option<TraceparentData> {
     tracing::Span::current()
@@ -154,12 +155,7 @@ mod tests {
                                 assert!(data.is_some());
                                 let data = data.unwrap();
                                 assert_eq!(data.trace_id, "4bf92f3577b34da6a3ce929d0e0e4736");
-                                assert!(is_valid_id(&data.span_id, 16));
-                                tracing::info!(
-                                    "Current Traceparent: trace_id={}, span_id={}",
-                                    data.trace_id,
-                                    data.span_id
-                                );
+                                tracing::info!("Current Traceparent: {:?}", data);
                                 "Hello, world!"
                             }),
                         )

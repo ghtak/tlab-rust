@@ -3,8 +3,13 @@ mod app_container;
 use std::sync::Arc;
 
 use app_config::AppConfig;
+use axum::{handler::HandlerWithoutStateExt, http::StatusCode};
 
 use crate::app_container::AppContainer;
+
+async fn handle_404() -> (StatusCode, &'static str) {
+    (StatusCode::NOT_FOUND, "Not found")
+}
 
 #[tokio::main]
 async fn main() -> tlab::Result<()> {
@@ -16,6 +21,11 @@ async fn main() -> tlab::Result<()> {
 
     let app = axum::Router::new()
         .route("/", axum::routing::get(|| async { "Hello, world!" }))
+        .layer(
+            tower_http::trace::TraceLayer::new_for_http()
+                .make_span_with(tlab::http::traceparent::new_http_request_span),
+        )
+        .fallback_service(handle_404.into_service())
         .with_state(container.clone());
 
     if let Some(tls_certificate_files) = container.config.tls_certificate_files.as_ref() {
