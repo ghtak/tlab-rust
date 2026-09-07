@@ -14,7 +14,6 @@ pub struct AppResponse<T: Serialize> {
 }
 
 impl<T: Serialize> AppResponse<T> {
-
     pub fn code(status_code: axum::http::StatusCode) -> Self {
         Self {
             status_code,
@@ -40,7 +39,7 @@ impl<T: Serialize> AppResponse<T> {
     }
 }
 
-impl IntoResponse for AppResponse<()> {
+impl<T: Serialize> IntoResponse for AppResponse<T> {
     fn into_response(self) -> axum::response::Response {
         (self.status_code, axum::Json(self)).into_response()
     }
@@ -48,38 +47,53 @@ impl IntoResponse for AppResponse<()> {
 
 #[cfg(test)]
 mod tests {
-    use axum::http::StatusCode;
+    use axum::{body::to_bytes, http::StatusCode, response::IntoResponse};
     use serde_json::json;
 
     use super::AppResponse;
 
-    #[test]
-    fn serializes_success_without_status_or_error() {
-        let response = AppResponse::<()>::code(StatusCode::OK);
+    async fn assert_response<T: serde::Serialize>(
+        response: AppResponse<T>,
+        expected_status: StatusCode,
+        expected_body: serde_json::Value,
+    ) {
+        let response = response.into_response();
 
+        assert_eq!(response.status(), expected_status);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         assert_eq!(
-            serde_json::to_value(response).unwrap(),
-            json!({})
+            serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
+            expected_body
         );
     }
 
-    #[test]
-    fn serializes_success_data_without_status_or_error() {
-        let response = AppResponse::data(StatusCode::OK, json!({ "id": "order-1" }));
-
-        assert_eq!(
-            serde_json::to_value(response).unwrap(),
-            json!({ "data": { "id": "order-1" } })
-        );
+    #[tokio::test]
+    async fn responds_with_empty_success_body() {
+        assert_response(
+            AppResponse::<()>::code(StatusCode::OK),
+            StatusCode::OK,
+            json!({}),
+        )
+        .await;
     }
 
-    #[test]
-    fn serializes_error_without_status_or_data() {
-        let response = AppResponse::<()>::error(StatusCode::NOT_FOUND, "Order not found".into());
+    #[tokio::test]
+    async fn responds_with_success_data() {
+        assert_response(
+            AppResponse::data(StatusCode::OK, json!({ "id": "order-1" })),
+            StatusCode::OK,
+            json!({ "data": { "id": "order-1" } }),
+        )
+        .await;
+    }
 
-        assert_eq!(
-            serde_json::to_value(response).unwrap(),
-            json!({ "error": "Order not found" } )
-        );
+    #[tokio::test]
+    async fn responds_with_error() {
+        assert_response(
+            AppResponse::<()>::error(StatusCode::NOT_FOUND, "Order not found".into()),
+            StatusCode::NOT_FOUND,
+            json!({ "error": "Order not found" }),
+        )
+        .await;
     }
 }
