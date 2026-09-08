@@ -1,6 +1,7 @@
 mod app_config;
 mod app_container;
 mod app_response;
+mod sample;
 use std::sync::Arc;
 
 use app_config::AppConfig;
@@ -21,7 +22,7 @@ async fn main() -> tlab::Result<()> {
 
     let container = Arc::new(AppContainer::new(config));
 
-    let app = axum::Router::new().route("/", axum::routing::get(|| async { "Hello, world!" }));
+    let app = axum::Router::new().merge(sample::route::router());
 
     let app = if let Some(static_files) = container.config.http.static_files.as_ref() {
         if let Err(e) = static_files.validate() {
