@@ -2,6 +2,8 @@ use tlab::Result;
 
 use super::app_config::AppConfig;
 
+pub type AppDbContext<'a> = tlab::sqlxdb::Context<'a, sqlx::Postgres>;
+
 pub struct AppContainer {
     pub config: AppConfig,
     pub http: tlab::http::Server,
