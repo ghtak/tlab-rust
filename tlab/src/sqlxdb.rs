@@ -5,7 +5,7 @@
 //! a transaction. Pass [`Context::backend`] to SQLx queries.
 
 /// Connection-pool settings passed to [`Database::new`].
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize)]
 pub struct Config {
     /// SQLx connection URL, for example `postgres://user:password@host/database`.
     pub url: String,

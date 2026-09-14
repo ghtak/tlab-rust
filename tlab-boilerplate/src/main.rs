@@ -1,7 +1,8 @@
 mod app_config;
 mod app_container;
 mod app_response;
-mod sample;
+mod auth;
+mod migration;
 use std::sync::Arc;
 
 use app_config::AppConfig;
@@ -20,9 +21,11 @@ async fn main() -> tlab::Result<()> {
 
     tlab::tracing::initialize(&config.tracing)?;
 
-    let container = Arc::new(AppContainer::new(config));
+    let container = Arc::new(AppContainer::new(config).await?);
 
-    let app = axum::Router::new().merge(sample::route::router());
+    migration::migrate(container.clone()).await?;
+
+    let app = axum::Router::new().merge(auth::route::router());
 
     let app = if let Some(static_files) = container.config.http.static_files.as_ref() {
         if let Err(e) = static_files.validate() {

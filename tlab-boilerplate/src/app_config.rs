@@ -8,6 +8,7 @@ pub struct AppConfig {
     pub tracing: tlab::tracing::Config,
     pub http: tlab::http::Config,
     pub tls_certificate_files: Option<tlab::cert::TlsCertificateFiles>,
+    pub database: tlab::sqlxdb::Config,
 }
 
 impl AppConfig {

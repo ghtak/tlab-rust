@@ -21,3 +21,7 @@ http:
 tls_certificate_files:
   cert: "cert.pem"
   key: "key.pem"
+
+database:
+  url: "postgres://tlab:tlab@localhost:25432/tlab"
+  max_connections: '16'
