@@ -1,12 +1,10 @@
-use crate::{app_container::AppDbContext, auth::entity};
+use crate::auth::entity;
 
-pub trait UserService: Sync + Send + 'static {
-    // Add any dependencies or configuration needed for the service
+pub trait UserService {
     async fn create_user(
         &self,
-        context: &mut AppDbContext<'_>,
-        name: String,
-        email: String,
-        password: String,
+        name: &str,
+        email: &str,
+        password: &str,
     ) -> tlab::Result<entity::UserAccount>;
 }
