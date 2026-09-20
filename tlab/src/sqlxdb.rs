@@ -16,8 +16,20 @@ pub struct Config {
 use crate::sqlxdb::{self};
 use sqlx::Acquire;
 
-fn map_error<E: Into<anyhow::Error>>(e: E) -> crate::Error {
+pub fn map_error<E: Into<anyhow::Error>>(e: E) -> crate::Error {
     crate::Error::DbDriver { source: e.into() }
+}
+
+pub mod postgres {
+    pub fn map_error(error: sqlx::Error) -> crate::Error {
+        if error
+            .as_database_error()
+            .is_some_and(|database_error| database_error.code().as_deref() == Some("23505"))
+        {
+            return crate::Error::Conflict("resource already exists".into());
+        }
+        super::map_error(error)
+    }
 }
 
 /// A reusable SQLx connection pool.

@@ -19,8 +19,17 @@ pub enum Error {
     #[error("Conflict {0}")]
     Conflict(Cow<'static, str>),
 
+    #[error("{0} not found")]
+    NotFound(Cow<'static, str>),
+
     #[error("Illegal state {0}")]
     IllegalState(Cow<'static, str>),
+}
+
+impl Error {
+    pub fn not_found(resource: impl Into<Cow<'static, str>>) -> Self {
+        Self::NotFound(resource.into())
+    }
 }
 
 pub type Result<T> = core::result::Result<T, Error>;
@@ -33,6 +42,12 @@ mod tests {
     fn test_error_to_string() {
         let err = Error::Internal(anyhow::anyhow!("test"));
         assert_eq!(err.to_string(), "internal error: test");
+    }
+
+    #[test]
+    fn not_found_error_has_resource_message() {
+        let err = Error::not_found("user account");
+        assert_eq!(err.to_string(), "user account not found");
     }
 
     #[test]
