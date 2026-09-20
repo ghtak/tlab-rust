@@ -1,4 +1,3 @@
+mod postgres_user_repository;
 
-pub trait UserRepository {
-
-}
+pub use postgres_user_repository::*;
