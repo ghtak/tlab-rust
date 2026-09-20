@@ -36,7 +36,7 @@ impl CreateManagedUserUsecase {
             &mut tx.context(),
             &command.name,
             &command.email,
-            "active",
+            entity::UserStatus::Active,
         )
         .await?;
 
@@ -121,7 +121,7 @@ mod tests {
 
         assert_eq!(account.name, "Alice");
         assert_eq!(account.email, email);
-        assert_eq!(account.status, "active");
+        assert_eq!(account.status, entity::UserStatus::Active);
 
         let mut connection = app_db.conn().await.unwrap();
         let password_hash: String = sqlx::query_scalar(
