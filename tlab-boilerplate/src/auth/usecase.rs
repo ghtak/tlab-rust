@@ -3,18 +3,18 @@ use std::sync::Arc;
 use crate::{app_container::AppDB, auth::entity};
 
 #[derive(Debug, Clone)]
-pub struct LocalSignUpCommand {
+pub struct CreateManagedUserCommand {
     pub name: String,
     pub email: String,
     pub password: String,
 }
 
-pub struct LocalSignUpUsecase {
+pub struct CreateManagedUserUsecase {
     app_db: Arc<AppDB>,
 }
 
-impl LocalSignUpUsecase {
-    async fn execute(&self, command: LocalSignUpCommand) -> tlab::Result<entity::UserAccount> {
+impl CreateManagedUserUsecase {
+    async fn execute(&self, command: CreateManagedUserCommand) -> tlab::Result<entity::UserAccount> {
         let mut tx = self.app_db.tx().await?;
         // todo: insert user account, identity, and credential into the database
         tx.commit().await?;

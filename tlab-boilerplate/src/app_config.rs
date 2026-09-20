@@ -9,6 +9,7 @@ pub struct AppConfig {
     pub http: tlab::http::Config,
     pub tls_certificate_files: Option<tlab::cert::TlsCertificateFiles>,
     pub database: tlab::sqlxdb::Config,
+    pub password_hash: tlab::hash::Argon2Config,
 }
 
 impl AppConfig {

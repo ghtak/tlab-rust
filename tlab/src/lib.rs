@@ -5,9 +5,9 @@ mod error;
 pub mod http;
 pub mod oracledb;
 pub mod oraclersdb;
+pub mod hash;
 pub mod sqlxdb;
 pub mod tracing;
-
 pub use error::*;
 
 #[cfg(test)]
