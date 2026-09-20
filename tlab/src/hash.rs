@@ -61,7 +61,7 @@ impl Argon2PasswordHasher {
     }
 }
 
-pub trait PasswordHasher {
+pub trait PasswordHasher : Sync + Send {
     fn hash(&self, password: &str) -> crate::Result<String>;
     fn verify(&self, password: &str, hashed: &str) -> crate::Result<()>;
     fn needs_rehash(&self, hashed: &str) -> crate::Result<bool>;
