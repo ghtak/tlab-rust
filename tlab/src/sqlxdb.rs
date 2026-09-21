@@ -21,6 +21,8 @@ pub fn map_error<E: Into<anyhow::Error>>(e: E) -> crate::Error {
 }
 
 pub mod postgres {
+    use sqlx::Row;
+
     pub fn map_error(error: sqlx::Error) -> crate::Error {
         if error
             .as_database_error()
@@ -29,6 +31,21 @@ pub mod postgres {
             return crate::Error::Conflict("resource already exists".into());
         }
         super::map_error(error)
+    }
+
+    pub trait RowExt {
+        fn value<T>(&self, column: &str) -> crate::Result<T>
+        where
+            for<'r> T: sqlx::Decode<'r, sqlx::Postgres> + sqlx::Type<sqlx::Postgres>;
+    }
+
+    impl RowExt for sqlx::postgres::PgRow {
+        fn value<T>(&self, column: &str) -> crate::Result<T>
+        where
+            for<'r> T: sqlx::Decode<'r, sqlx::Postgres> + sqlx::Type<sqlx::Postgres>,
+        {
+            self.try_get(column).map_err(map_error)
+        }
     }
 }
 
