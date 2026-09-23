@@ -44,17 +44,23 @@ pub struct UserIdentityRow {
     pub last_login_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-impl From<UserIdentityRow> for entity::UserIdentity {
-    fn from(row: UserIdentityRow) -> Self {
-        Self {
+impl TryFrom<UserIdentityRow> for entity::UserIdentity {
+    type Error = tlab::Error;
+
+    fn try_from(row: UserIdentityRow) -> Result<Self, Self::Error> {
+        let provider = row.provider.parse::<entity::Provider>().map_err(|_| {
+            tlab::Error::IllegalState(format!("invalid provider: {}", row.provider).into())
+        })?;
+
+        Ok(Self {
             id: row.id,
             user_account_id: row.user_account_id,
-            provider: row.provider,
+            provider,
             provider_subject: row.provider_subject,
             provider_email: row.provider_email,
             created_at: row.created_at,
             last_login_at: row.last_login_at,
-        }
+        })
     }
 }
 
@@ -66,13 +72,19 @@ pub struct UserCredentialRow {
     pub password_changed_at: chrono::DateTime<chrono::Utc>,
 }
 
-impl From<UserCredentialRow> for entity::UserCredential {
-    fn from(row: UserCredentialRow) -> Self {
-        Self {
+impl TryFrom<UserCredentialRow> for entity::UserCredential {
+    type Error = tlab::Error;
+
+    fn try_from(row: UserCredentialRow) -> Result<Self, Self::Error> {
+        let provider = row.provider.parse::<entity::Provider>().map_err(|_| {
+            tlab::Error::IllegalState(format!("invalid provider: {}", row.provider).into())
+        })?;
+
+        Ok(Self {
             user_identity_id: row.user_identity_id,
-            provider: row.provider,
+            provider,
             password_hash: row.password_hash,
             password_changed_at: row.password_changed_at,
-        }
+        })
     }
 }

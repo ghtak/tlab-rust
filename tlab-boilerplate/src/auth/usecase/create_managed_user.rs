@@ -43,7 +43,7 @@ impl CreateManagedUserUsecase {
         let user_identity = repository::create_user_identity(
             &mut tx.context(),
             user_account.id,
-            "managed",
+            entity::Provider::Managed,
             user_account.email.as_str(),
             Some(user_account.email.as_str()),
         )
@@ -52,7 +52,7 @@ impl CreateManagedUserUsecase {
         repository::create_user_credential(
             &mut tx.context(),
             user_identity.id,
-            "managed",
+            entity::Provider::Managed,
             &password_hash,
         )
         .await?;

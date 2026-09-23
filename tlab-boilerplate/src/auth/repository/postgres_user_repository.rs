@@ -74,7 +74,7 @@ pub async fn withdraw_user_account(
 pub async fn create_user_identity(
     context: &mut AppDBCtx<'_>,
     user_account_id: i64,
-    provider: &str,
+    provider: entity::Provider,
     provider_subject: &str,
     provider_email: Option<&str>,
 ) -> tlab::Result<entity::UserIdentity> {
@@ -84,14 +84,14 @@ pub async fn create_user_identity(
          VALUES ($1, $2, $3, $4) \
          RETURNING id, user_account_id, provider, provider_subject, provider_email, created_at, last_login_at",
         user_account_id,
-        provider,
+        provider.as_str(),
         provider_subject,
         provider_email
     )
     .fetch_one(context.backend())
     .await
-    .map_err(sqlxdb::postgres::map_error)
-    .map(Into::into)
+    .map_err(sqlxdb::postgres::map_error)?
+    .try_into()
 }
 
 pub async fn update_user_identity(
@@ -110,8 +110,9 @@ pub async fn update_user_identity(
     )
     .fetch_optional(context.backend())
     .await
-    .map_err(sqlxdb::postgres::map_error)
-    .map(|opt| opt.map(Into::into))
+    .map_err(sqlxdb::postgres::map_error)?
+    .map(TryInto::try_into)
+    .transpose()
 }
 
 pub async fn delete_user_identity(
@@ -135,7 +136,7 @@ pub async fn delete_user_identity(
 pub async fn create_user_credential(
     context: &mut AppDBCtx<'_>,
     user_identity_id: i64,
-    provider: &str,
+    provider: entity::Provider,
     password_hash: &str,
 ) -> tlab::Result<entity::UserCredential> {
     sqlx::query_as!(
@@ -144,13 +145,13 @@ pub async fn create_user_credential(
          VALUES ($1, $2, $3) \
          RETURNING user_identity_id, provider, password_hash, password_changed_at",
         user_identity_id,
-        provider,
+        provider.as_str(),
         password_hash
     )
     .fetch_one(context.backend())
     .await
-    .map_err(sqlxdb::postgres::map_error)
-    .map(Into::into)
+    .map_err(sqlxdb::postgres::map_error)?
+    .try_into()
 }
 
 pub async fn update_user_credential(
@@ -165,12 +166,13 @@ pub async fn update_user_credential(
          RETURNING user_identity_id, provider, password_hash, password_changed_at",
         &user_credential.password_hash,
         user_credential.user_identity_id,
-        &user_credential.provider
+        user_credential.provider.as_str()
     )
     .fetch_optional(context.backend())
     .await
-    .map_err(sqlxdb::postgres::map_error)
-    .map(|opt| opt.map(Into::into))
+    .map_err(sqlxdb::postgres::map_error)?
+    .map(TryInto::try_into)
+    .transpose()
 }
 
 pub async fn delete_user_credential(
@@ -249,7 +251,7 @@ mod tests {
         let mut identity = create_user_identity(
             &mut context,
             account.id,
-            "test-provider",
+            entity::Provider::Managed,
             &suffix,
             Some("alice@example.com"),
         )
@@ -265,14 +267,10 @@ mod tests {
             Some("updated@example.com")
         );
 
-        let mut credential = create_user_credential(
-            &mut context,
-            identity.id,
-            &identity.provider,
-            "initial-hash",
-        )
-        .await
-        .unwrap();
+        let mut credential =
+            create_user_credential(&mut context, identity.id, identity.provider, "initial-hash")
+                .await
+                .unwrap();
         credential.password_hash = "updated-hash".into();
         let credential = update_user_credential(&mut context, &credential)
             .await

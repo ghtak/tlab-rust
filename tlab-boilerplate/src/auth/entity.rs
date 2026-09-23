@@ -28,6 +28,30 @@ impl std::str::FromStr for UserStatus {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Provider {
+    Managed,
+}
+
+impl Provider {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Managed => "managed",
+        }
+    }
+}
+
+impl std::str::FromStr for Provider {
+    type Err = ();
+
+    fn from_str(provider: &str) -> Result<Self, Self::Err> {
+        match provider {
+            "managed" => Ok(Self::Managed),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct UserAccount {
     pub id: i64,
@@ -44,7 +68,7 @@ pub struct UserAccount {
 pub struct UserIdentity {
     pub id: i64,
     pub user_account_id: i64,
-    pub provider: String,
+    pub provider: Provider,
     pub provider_subject: String,
     pub provider_email: Option<String>,
     pub created_at: chrono::DateTime<chrono::Utc>,
@@ -54,7 +78,7 @@ pub struct UserIdentity {
 #[derive(Debug, Clone)]
 pub struct UserCredential {
     pub user_identity_id: i64,
-    pub provider: String,
+    pub provider: Provider,
     pub password_hash: String,
     pub password_changed_at: chrono::DateTime<chrono::Utc>,
 }
