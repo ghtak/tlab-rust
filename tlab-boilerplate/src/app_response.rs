@@ -2,7 +2,7 @@ use axum::response::IntoResponse;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
-pub struct AppResponse<T: Serialize> {
+pub struct AppResponse<T> {
     #[serde(skip)]
     pub status_code: axum::http::StatusCode,
 
@@ -20,6 +20,24 @@ impl AppResponse<()> {
             data: None,
             error: None,
         }
+    }
+}
+
+impl<T> AppResponse<T> {
+    pub fn new(status_code: axum::http::StatusCode, data: T) -> Self {
+        Self {
+            status_code: status_code,
+            data: Some(data),
+            error: None,
+        }
+    }
+
+    pub fn data(data: T) -> Self {
+        Self::new(axum::http::StatusCode::OK, data)
+    }
+
+    pub fn created(data: T) -> Self {
+        Self::new(axum::http::StatusCode::CREATED, data)
     }
 
     pub fn bad_request(message: impl Into<String>) -> Self {
@@ -52,29 +70,6 @@ impl AppResponse<()> {
             data: None,
             error: Some(message.into()),
         }
-    }
-}
-
-impl<T: Serialize> AppResponse<T> {
-    pub fn data(data: T) -> Self {
-        Self {
-            status_code: axum::http::StatusCode::OK,
-            data: Some(data),
-            error: None,
-        }
-    }
-
-    pub fn created(data: T) -> Self {
-        Self {
-            status_code: axum::http::StatusCode::CREATED,
-            data: Some(data),
-            error: None,
-        }
-    }
-
-    pub fn status(mut self, status_code: axum::http::StatusCode) -> Self {
-        self.status_code = status_code;
-        self
     }
 }
 
@@ -132,19 +127,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn overrides_response_status() {
-        assert_response(
-            AppResponse::data(json!({ "id": "order-1" })).status(StatusCode::ACCEPTED),
-            StatusCode::ACCEPTED,
-            json!({ "data": { "id": "order-1" } }),
-        )
-        .await;
-    }
-
-    #[tokio::test]
     async fn responds_with_not_found_error() {
         assert_response(
-            AppResponse::not_found("Order not found"),
+            AppResponse::<()>::not_found("Order not found"),
             StatusCode::NOT_FOUND,
             json!({ "error": "Order not found" }),
         )

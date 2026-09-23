@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    app_container::AppDB,
-    auth::{entity, repository},
+    app_container::AppDB, auth::{entity, repository::{self, user_repository}},
 };
 
 #[derive(Debug, Clone)]
@@ -32,7 +31,7 @@ impl CreateManagedUserUsecase {
         let password_hash = self.password_hasher.hash(&command.password)?;
         let mut tx = self.app_db.tx().await?;
 
-        let user_account = repository::create_user_account(
+        let user_account = user_repository::create_user_account(
             &mut tx.context(),
             &command.name,
             &command.email,
@@ -40,7 +39,7 @@ impl CreateManagedUserUsecase {
         )
         .await?;
 
-        let user_identity = repository::create_user_identity(
+        let user_identity = user_repository::create_user_identity(
             &mut tx.context(),
             user_account.id,
             entity::Provider::Managed,
@@ -49,7 +48,7 @@ impl CreateManagedUserUsecase {
         )
         .await?;
 
-        repository::create_user_credential(
+        user_repository::create_user_credential(
             &mut tx.context(),
             user_identity.id,
             entity::Provider::Managed,
