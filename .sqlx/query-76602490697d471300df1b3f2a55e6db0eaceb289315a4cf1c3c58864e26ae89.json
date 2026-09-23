@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM tlab_user_credential WHERE user_identity_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "76602490697d471300df1b3f2a55e6db0eaceb289315a4cf1c3c58864e26ae89"
+}

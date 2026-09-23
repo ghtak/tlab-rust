@@ -1,0 +1,66 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE tlab_user_credential SET password_hash = $1, password_changed_at = CURRENT_TIMESTAMP WHERE user_identity_id = $2 AND provider = $3 RETURNING user_identity_id, provider, password_hash, password_changed_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_identity_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "tlab_user_credential",
+            "name": "user_identity_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "provider",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "tlab_user_credential",
+            "name": "provider"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "password_hash",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "tlab_user_credential",
+            "name": "password_hash"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "password_changed_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "tlab_user_credential",
+            "name": "password_changed_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "3c31b8669308596a8c88b623461b514095ccc6e0de1711173270eeae25b2d5cd"
+}
