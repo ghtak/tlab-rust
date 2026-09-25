@@ -19,8 +19,9 @@ http:
   #   mount_path: "/static"
 
 tls_certificate_files:
-  cert: "cert.pem"
-  key: "key.pem"
+  cert: "tls-cert.pem"
+  key: "tls-key.pem"
+  generate_if_missing: true
 
 database:
   url: "postgres://tlab:tlab@localhost:25432/tlab"
@@ -36,8 +37,8 @@ jwt:
   key_files:
     private_key: "jwt-private.pem"
     public_key: "jwt-public.pem"
+    generate_if_missing: true
   issuer: "tlab-boilerplate"
   audience: "tlab-boilerplate"
   access_token_ttl_seconds: 900
   refresh_token_ttl_seconds: 2592000
-  generate_if_missing: true

@@ -49,11 +49,7 @@ async fn main() -> tlab::Result<()> {
         .with_state(container.clone());
 
     if let Some(tls_certificate_files) = container.config.tls_certificate_files.as_ref() {
-        if !tls_certificate_files.exists() {
-            tracing::info!("Generating self-signed certificate");
-            tls_certificate_files
-                .generate_self_signed_certificate(&vec![container.config.http.host.clone()])?;
-        }
+        tls_certificate_files.ensure_files(&[container.config.http.host.clone()])?;
         container.http.run_https(app, tls_certificate_files).await?;
     } else {
         container.http.run_http(app).await?;

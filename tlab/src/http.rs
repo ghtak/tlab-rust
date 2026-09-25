@@ -217,6 +217,7 @@ mod tests {
         let tls_certificate_files = TlsCertificateFiles {
             cert: "cert.pem".to_owned(),
             key: "key.pem".to_owned(),
+            generate_if_missing: false,
         };
 
         let error = server

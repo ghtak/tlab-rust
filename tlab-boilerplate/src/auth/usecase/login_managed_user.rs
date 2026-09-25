@@ -119,6 +119,7 @@ mod tests {
         let key_files = EdDsaKeyFiles {
             private_key: directory.join("private.pem").to_string_lossy().into_owned(),
             public_key: directory.join("public.pem").to_string_lossy().into_owned(),
+            generate_if_missing: true,
         };
         let codec = JwtCodec::new(&JwtConfig {
             key_files: key_files.clone(),
@@ -126,7 +127,6 @@ mod tests {
             audience: "tlab-boilerplate".into(),
             access_token_ttl_seconds: 60,
             refresh_token_ttl_seconds: 3600,
-            generate_if_missing: true,
         })
         .unwrap();
         std::fs::remove_file(key_files.private_key).unwrap();

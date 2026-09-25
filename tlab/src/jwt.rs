@@ -14,9 +14,23 @@ use crate::{Error, Result};
 pub struct EdDsaKeyFiles {
     pub private_key: String,
     pub public_key: String,
+    pub generate_if_missing: bool,
 }
 
 impl EdDsaKeyFiles {
+    pub fn ensure_files(&self) -> Result<()> {
+        self.validate_paths()?;
+        match (
+            Path::new(&self.private_key).exists(),
+            Path::new(&self.public_key).exists(),
+        ) {
+            (true, true) => Ok(()),
+            (false, false) if self.generate_if_missing => self.generate(),
+            (false, false) => Err(Error::IllegalState("JWT key files are missing".into())),
+            _ => Err(Error::IllegalState("JWT key files are incomplete".into())),
+        }
+    }
+
     pub fn generate(&self) -> Result<()> {
         self.validate_paths()?;
         if Path::new(&self.private_key).exists() || Path::new(&self.public_key).exists() {
@@ -62,7 +76,6 @@ pub struct JwtConfig {
     pub audience: String,
     pub access_token_ttl_seconds: u64,
     pub refresh_token_ttl_seconds: u64,
-    pub generate_if_missing: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -114,15 +127,7 @@ impl JwtCodec {
             return Err(Error::IllegalState("invalid JWT configuration".into()));
         }
 
-        config.key_files.validate_paths()?;
-        let private_exists = Path::new(&config.key_files.private_key).exists();
-        let public_exists = Path::new(&config.key_files.public_key).exists();
-        match (private_exists, public_exists) {
-            (true, true) => {}
-            (false, false) if config.generate_if_missing => config.key_files.generate()?,
-            (false, false) => return Err(Error::IllegalState("JWT key files are missing".into())),
-            _ => return Err(Error::IllegalState("JWT key files are incomplete".into())),
-        }
+        config.key_files.ensure_files()?;
 
         let private_key = fs::read(&config.key_files.private_key)?;
         let public_key = fs::read(&config.key_files.public_key)?;
@@ -242,12 +247,12 @@ mod tests {
                         .join("public.pem")
                         .to_string_lossy()
                         .into_owned(),
+                    generate_if_missing: true,
                 },
                 issuer: "tlab".into(),
                 audience: "tlab-api".into(),
                 access_token_ttl_seconds: 60,
                 refresh_token_ttl_seconds: 3600,
-                generate_if_missing: true,
             }
         }
     }
@@ -280,7 +285,7 @@ mod tests {
         );
 
         let mut reload_config = config.clone();
-        reload_config.generate_if_missing = false;
+        reload_config.key_files.generate_if_missing = false;
         let reloaded = JwtCodec::new(&reload_config).unwrap();
         let access = reloaded.verify(&pair.access.token).unwrap();
         let refresh = reloaded.verify(&pair.refresh.token).unwrap();
@@ -302,14 +307,14 @@ mod tests {
     fn rejects_missing_or_incomplete_key_files() {
         let keys = TestKeys::new();
         let mut config = keys.config();
-        config.generate_if_missing = false;
+        config.key_files.generate_if_missing = false;
         assert!(matches!(
             JwtCodec::new(&config),
             Err(Error::IllegalState(_))
         ));
 
         fs::write(&config.key_files.private_key, "incomplete key").unwrap();
-        config.generate_if_missing = true;
+        config.key_files.generate_if_missing = true;
         assert!(matches!(
             JwtCodec::new(&config),
             Err(Error::IllegalState(_))
