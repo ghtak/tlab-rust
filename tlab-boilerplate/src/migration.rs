@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::app_container::AppContainer;
 
-const AUTH_MIGRATIONS: [(&str, &str); 2] = [
+const AUTH_MIGRATIONS: [(&str, &str); 3] = [
     (
         "001_create_user_account.sql",
         include_str!("auth/migrations/001_create_user_account.sql"),
@@ -10,6 +10,10 @@ const AUTH_MIGRATIONS: [(&str, &str); 2] = [
     (
         "002_create_user_identity_and_credential.sql",
         include_str!("auth/migrations/002_create_user_identity_and_credential.sql"),
+    ),
+    (
+        "003_create_refresh_token.sql",
+        include_str!("auth/migrations/003_create_refresh_token.sql"),
     ),
 ];
 

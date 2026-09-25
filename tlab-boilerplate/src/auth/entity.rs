@@ -88,3 +88,11 @@ pub struct ManagedLoginUser {
     pub account: UserAccount,
     pub credential: UserCredential,
 }
+
+#[derive(Debug, Clone)]
+pub struct RefreshToken {
+    pub user_account_id: i64,
+    pub token_hash: Vec<u8>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub expires_at: chrono::DateTime<chrono::Utc>,
+}
