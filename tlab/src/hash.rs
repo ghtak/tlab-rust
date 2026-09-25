@@ -1,7 +1,8 @@
 use argon2::{
     Algorithm, Argon2, Params, Version,
     password_hash::{
-        PasswordHash, PasswordHasher as _, PasswordVerifier as _, SaltString, rand_core::OsRng,
+        Error as PasswordHashError, PasswordHash, PasswordHasher as _, PasswordVerifier as _,
+        SaltString, rand_core::OsRng,
     },
 };
 use pbkdf2::{Algorithm as Pbkdf2Algorithm, Params as Pbkdf2Params, Pbkdf2};
@@ -9,6 +10,13 @@ use serde::Deserialize;
 
 fn hash_error(error: impl std::fmt::Display) -> crate::Error {
     crate::Error::Internal(anyhow::anyhow!(error.to_string()))
+}
+
+fn verify_error(error: PasswordHashError) -> crate::Error {
+    match error {
+        PasswordHashError::Password => crate::Error::InvalidCredentials,
+        error => hash_error(error),
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -61,7 +69,7 @@ impl Argon2PasswordHasher {
     }
 }
 
-pub trait PasswordHasher : Sync + Send {
+pub trait PasswordHasher: Sync + Send {
     fn hash(&self, password: &str) -> crate::Result<String>;
     fn verify(&self, password: &str, hashed: &str) -> crate::Result<()>;
     fn needs_rehash(&self, hashed: &str) -> crate::Result<bool>;
@@ -81,7 +89,7 @@ impl PasswordHasher for Argon2PasswordHasher {
         let hash = PasswordHash::new(hashed).map_err(hash_error)?;
         self.argon2()
             .verify_password(password.as_bytes(), &hash)
-            .map_err(hash_error)?;
+            .map_err(verify_error)?;
         Ok(())
     }
 
@@ -107,7 +115,7 @@ impl PasswordHasher for Pbkdf2PasswordHasher {
         let hash = PasswordHash::new(hashed).map_err(hash_error)?;
         Pbkdf2
             .verify_password(password.as_bytes(), &hash)
-            .map_err(hash_error)?;
+            .map_err(verify_error)?;
         Ok(())
     }
 
@@ -137,7 +145,14 @@ mod tests {
         let hash = hasher.hash("password").unwrap();
 
         hasher.verify("password", &hash).unwrap();
-        assert!(hasher.verify("incorrect", &hash).is_err());
+        assert!(matches!(
+            hasher.verify("incorrect", &hash),
+            Err(crate::Error::InvalidCredentials)
+        ));
+        assert!(matches!(
+            hasher.verify("password", "invalid hash"),
+            Err(crate::Error::Internal(_))
+        ));
     }
 
     #[test]
@@ -163,7 +178,10 @@ mod tests {
         let hash = hasher.hash("password").unwrap();
 
         hasher.verify("password", &hash).unwrap();
-        assert!(hasher.verify("incorrect", &hash).is_err());
+        assert!(matches!(
+            hasher.verify("incorrect", &hash),
+            Err(crate::Error::InvalidCredentials)
+        ));
         assert!(!hasher.needs_rehash(&hash).unwrap());
 
         let stronger = Pbkdf2PasswordHasher::new(&Pbkdf2Config {

@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use crate::{
-    app_container::AppDB, auth::{entity, repository::{self, user_repository}},
+    app_container::AppDB,
+    auth::{entity, repository::user_repository},
 };
 
 #[derive(Debug, Clone)]
@@ -26,7 +27,7 @@ impl CreateManagedUserUsecase {
 
     pub async fn execute(
         &self,
-        command: CreateManagedUserCommand,
+        command: &CreateManagedUserCommand,
     ) -> tlab::Result<entity::UserAccount> {
         let password_hash = self.password_hasher.hash(&command.password)?;
         let mut tx = self.app_db.tx().await?;
@@ -110,7 +111,7 @@ mod tests {
         let email = format!("{suffix}@example.com");
 
         let account = usecase
-            .execute(CreateManagedUserCommand {
+            .execute(&CreateManagedUserCommand {
                 name: "Alice".into(),
                 email: email.clone(),
                 password: "password".into(),

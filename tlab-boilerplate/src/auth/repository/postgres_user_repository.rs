@@ -71,6 +71,56 @@ pub async fn withdraw_user_account(
     .transpose()
 }
 
+pub async fn find_managed_login_user(
+    context: &mut AppDBCtx<'_>,
+    email: &str,
+) -> tlab::Result<Option<entity::ManagedLoginUser>> {
+    let row = sqlx::query!(
+        r#"SELECT account.id AS account_id, account.name AS account_name,
+                account.email AS account_email, account.status AS account_status,
+                account.created_at AS account_created_at, account.updated_at AS account_updated_at,
+                account.create_by AS account_create_by, account.update_by AS account_update_by,
+                credential.user_identity_id AS credential_identity_id,
+                credential.password_hash AS password_hash,
+                credential.password_changed_at AS password_changed_at
+         FROM tlab_user_account AS account
+         JOIN tlab_user_identity AS identity
+           ON identity.user_account_id = account.id AND identity.provider = 'managed'
+         JOIN tlab_user_credential AS credential
+           ON credential.user_identity_id = identity.id AND credential.provider = 'managed'
+         WHERE account.email = $1"#,
+        email
+    )
+    .fetch_optional(context.backend())
+    .await
+    .map_err(sqlxdb::postgres::map_error)?;
+
+    row.map(|row| {
+        let status = row.account_status.parse().map_err(|_| {
+            tlab::Error::IllegalState(format!("invalid user status: {}", row.account_status).into())
+        })?;
+        Ok(entity::ManagedLoginUser {
+            account: entity::UserAccount {
+                id: row.account_id,
+                name: row.account_name,
+                email: row.account_email,
+                status,
+                created_at: row.account_created_at,
+                updated_at: row.account_updated_at,
+                create_by: row.account_create_by,
+                update_by: row.account_update_by,
+            },
+            credential: entity::UserCredential {
+                user_identity_id: row.credential_identity_id,
+                provider: entity::Provider::Managed,
+                password_hash: row.password_hash,
+                password_changed_at: row.password_changed_at,
+            },
+        })
+    })
+    .transpose()
+}
+
 pub async fn create_user_identity(
     context: &mut AppDBCtx<'_>,
     user_account_id: i64,
@@ -128,7 +178,7 @@ pub async fn delete_user_identity(
     .map_err(sqlxdb::postgres::map_error)?;
 
     if result.rows_affected() == 0 {
-        return Err(tlab::Error::not_found("user identity"));
+        return Err(tlab::Error::NotFound("user identity".into()));
     }
     Ok(())
 }
@@ -188,7 +238,7 @@ pub async fn delete_user_credential(
     .map_err(sqlxdb::postgres::map_error)?;
 
     if result.rows_affected() == 0 {
-        return Err(tlab::Error::not_found("user credential"));
+        return Err(tlab::Error::NotFound("user credential".into()));
     }
     Ok(())
 }
@@ -277,6 +327,19 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(credential.password_hash, "updated-hash");
+
+        let login_user = find_managed_login_user(&mut context, &email)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(login_user.account.id, account.id);
+        assert_eq!(login_user.credential.password_hash, "updated-hash");
+        assert!(
+            find_managed_login_user(&mut context, "missing@example.com")
+                .await
+                .unwrap()
+                .is_none()
+        );
 
         delete_user_credential(&mut context, identity.id)
             .await

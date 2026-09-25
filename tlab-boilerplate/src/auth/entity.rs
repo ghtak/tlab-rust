@@ -82,3 +82,9 @@ pub struct UserCredential {
     pub password_hash: String,
     pub password_changed_at: chrono::DateTime<chrono::Utc>,
 }
+
+#[derive(Debug, Clone)]
+pub struct ManagedLoginUser {
+    pub account: UserAccount,
+    pub credential: UserCredential,
+}
