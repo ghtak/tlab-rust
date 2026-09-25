@@ -25,6 +25,9 @@ pub enum Error {
     #[error("invalid credentials")]
     InvalidCredentials,
 
+    #[error("invalid token")]
+    InvalidToken,
+
     #[error("Illegal state {0}")]
     IllegalState(Cow<'static, str>),
 }
