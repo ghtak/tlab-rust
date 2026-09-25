@@ -10,6 +10,7 @@ pub struct AppConfig {
     pub tls_certificate_files: Option<tlab::cert::TlsCertificateFiles>,
     pub database: tlab::sqlxdb::Config,
     pub password_hash: tlab::hash::Argon2Config,
+    pub jwt: tlab::jwt::JwtConfig,
 }
 
 impl AppConfig {

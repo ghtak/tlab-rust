@@ -31,3 +31,13 @@ password_hash:
   time_cost: 2
   parallelism: 1
   output_len: 32
+
+jwt:
+  key_files:
+    private_key: "jwt-private.pem"
+    public_key: "jwt-public.pem"
+  issuer: "tlab-boilerplate"
+  audience: "tlab-boilerplate"
+  access_token_ttl_seconds: 900
+  refresh_token_ttl_seconds: 2592000
+  generate_if_missing: true

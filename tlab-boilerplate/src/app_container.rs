@@ -12,6 +12,7 @@ pub struct AppContainer {
     pub http: tlab::http::Server,
     pub database: Arc<AppDB>,
     pub password_hasher: Arc<dyn tlab::hash::PasswordHasher>,
+    pub jwt_codec: Arc<tlab::jwt::JwtCodec>,
 }
 
 impl AppContainer {
@@ -20,11 +21,13 @@ impl AppContainer {
         let password_hasher = Arc::new(tlab::hash::Argon2PasswordHasher::new(
             &config.password_hash,
         )?);
+        let jwt_codec = Arc::new(tlab::jwt::JwtCodec::new(&config.jwt)?);
         Ok(Self {
             config: config.clone(),
             http: tlab::http::Server::new(config.http.clone()),
             database,
             password_hasher,
+            jwt_codec,
         })
     }
 }

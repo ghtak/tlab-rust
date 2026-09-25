@@ -68,7 +68,7 @@ pub struct JwtConfig {
 #[derive(Debug, Clone)]
 pub struct IssuedToken {
     pub token: String,
-    pub expires_in: u64,
+    pub expires_at: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -200,7 +200,7 @@ impl JwtCodec {
                 .map_err(|error| Error::Internal(anyhow::anyhow!(error)))?;
         Ok(IssuedToken {
             token,
-            expires_in: ttl,
+            expires_at: exp,
         })
     }
 }
@@ -267,8 +267,6 @@ mod tests {
         let codec = JwtCodec::new(&config).unwrap();
         let pair = codec.issue_pair("user-42").unwrap();
 
-        assert_eq!(pair.access.expires_in, 60);
-        assert_eq!(pair.refresh.expires_in, 3600);
         assert_ne!(pair.access.token, pair.refresh.token);
         assert!(
             fs::read_to_string(&config.key_files.private_key)
@@ -288,8 +286,11 @@ mod tests {
         let refresh = reloaded.verify(&pair.refresh.token).unwrap();
         assert_eq!(access.sub, "user-42");
         assert_eq!(access.token_use, TokenUse::Access);
+        assert_eq!(pair.access.expires_at, access.exp);
+        assert_eq!(access.exp - access.iat, 60);
         assert_eq!(refresh.sub, "user-42");
         assert_eq!(refresh.token_use, TokenUse::Refresh);
+        assert_eq!(pair.refresh.expires_at, refresh.exp);
         assert_eq!(refresh.exp - refresh.iat, 3600);
         assert!(matches!(
             config.key_files.generate(),

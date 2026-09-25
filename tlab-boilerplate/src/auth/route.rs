@@ -82,6 +82,7 @@ async fn login(
     let usecase = auth::usecase::LoginManagedUserUsecase::new(
         container.database.clone(),
         container.password_hasher.clone(),
+        container.jwt_codec.clone(),
     );
 
     match usecase.execute(&command).await {
