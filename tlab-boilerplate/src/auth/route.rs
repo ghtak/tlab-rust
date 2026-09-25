@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use axum::{extract::State, routing::post};
+use axum::{extract::State, http::header, response::IntoResponse, routing::post};
 
 use crate::{
     app_container::AppContainer,
@@ -71,10 +71,18 @@ struct LoginManagedUserRequest {
     password: String,
 }
 
+#[derive(serde::Serialize)]
+struct LoginManagedUserResponse {
+    access_token: String,
+    refresh_token: String,
+    token_type: &'static str,
+    expires_in: u64,
+}
+
 async fn login(
     State(container): State<Arc<AppContainer>>,
     axum::Json(request): axum::Json<LoginManagedUserRequest>,
-) -> AppResponse<()> {
+) -> impl IntoResponse {
     let command = LoginManagedUserCommand {
         email: request.email,
         password: request.password,
@@ -85,14 +93,21 @@ async fn login(
         container.jwt_codec.clone(),
     );
 
-    match usecase.execute(&command).await {
-        Ok(_) => AppResponse::ok(),
+    let response = match usecase.execute(&command).await {
+        Ok(result) => AppResponse::data(LoginManagedUserResponse {
+            access_token: result.tokens.access.token,
+            refresh_token: result.tokens.refresh.token,
+            token_type: "Bearer",
+            expires_in: container.config.jwt.access_token_ttl_seconds,
+        }),
         Err(tlab::Error::InvalidCredentials) => AppResponse::unauthorized("invalid credentials"),
         Err(error) => {
             tracing::error!(?error, "Failed to log in managed user");
             AppResponse::internal_error("failed to log in")
         }
-    }
+    };
+
+    ([(header::CACHE_CONTROL, "no-store")], response)
 }
 
 async fn logout(State(_container): State<Arc<AppContainer>>) -> AppResponse<()> {
