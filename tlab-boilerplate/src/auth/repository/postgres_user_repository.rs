@@ -1,12 +1,6 @@
-use tlab::sqlxdb::{self};
+use tlab::sqlxdb;
 
-use crate::{
-    app_container::AppDBCtx,
-    auth::{
-        entity,
-        repository::row::{UserAccountRow, UserCredentialRow, UserIdentityRow},
-    },
-};
+use crate::{app_container::AppDBCtx, auth::entity};
 
 pub async fn create_user_account(
     context: &mut AppDBCtx<'_>,
@@ -14,31 +8,42 @@ pub async fn create_user_account(
     email: &str,
     status: entity::UserStatus,
 ) -> tlab::Result<entity::UserAccount> {
-    sqlx::query_as!(
-        UserAccountRow,
-        "INSERT INTO tlab_user_account (name, email, status) \
-         VALUES ($1, $2, $3) \
-         RETURNING id, name, email, status, created_at, updated_at, create_by, update_by",
+    let row = sqlx::query!(
+        r#"INSERT INTO tlab_user_account (name, email, status)
+           VALUES ($1, $2, $3)
+           RETURNING id, name, email, status, created_at, updated_at, create_by, update_by"#,
         name,
         email,
         status.as_str()
     )
     .fetch_one(context.backend())
     .await
-    .map_err(sqlxdb::postgres::map_error)?
-    .try_into()
+    .map_err(sqlxdb::postgres::map_error)?;
+
+    let status = row.status.parse().map_err(|_| {
+        tlab::Error::IllegalState(format!("invalid user status: {}", row.status).into())
+    })?;
+    Ok(entity::UserAccount {
+        id: row.id,
+        name: row.name,
+        email: row.email,
+        status,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        create_by: row.create_by,
+        update_by: row.update_by,
+    })
 }
 
 pub async fn update_user_account(
     context: &mut AppDBCtx<'_>,
     user_account: &entity::UserAccount,
 ) -> tlab::Result<Option<entity::UserAccount>> {
-    sqlx::query_as!(
-        UserAccountRow,
-        "UPDATE tlab_user_account \
-         SET name = $1, email = $2, status = $3, update_by = $4, updated_at = CURRENT_TIMESTAMP \
-         WHERE id = $5 \
-         RETURNING id, name, email, status, created_at, updated_at, create_by, update_by",
+    let row = sqlx::query!(
+        r#"UPDATE tlab_user_account
+           SET name = $1, email = $2, status = $3, update_by = $4, updated_at = CURRENT_TIMESTAMP
+           WHERE id = $5
+           RETURNING id, name, email, status, created_at, updated_at, create_by, update_by"#,
         &user_account.name,
         &user_account.email,
         user_account.status.as_str(),
@@ -47,8 +52,23 @@ pub async fn update_user_account(
     )
     .fetch_optional(context.backend())
     .await
-    .map_err(sqlxdb::postgres::map_error)?
-    .map(|row| row.try_into())
+    .map_err(sqlxdb::postgres::map_error)?;
+
+    row.map(|row| {
+        let status = row.status.parse().map_err(|_| {
+            tlab::Error::IllegalState(format!("invalid user status: {}", row.status).into())
+        })?;
+        Ok(entity::UserAccount {
+            id: row.id,
+            name: row.name,
+            email: row.email,
+            status,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            create_by: row.create_by,
+            update_by: row.update_by,
+        })
+    })
     .transpose()
 }
 
@@ -56,18 +76,32 @@ pub async fn withdraw_user_account(
     context: &mut AppDBCtx<'_>,
     user_account_id: i64,
 ) -> tlab::Result<Option<entity::UserAccount>> {
-    sqlx::query_as!(
-        UserAccountRow,
-        "UPDATE tlab_user_account \
-         SET status = 'withdrawn', updated_at = CURRENT_TIMESTAMP \
-         WHERE id = $1 \
-         RETURNING id, name, email, status, created_at, updated_at, create_by, update_by",
+    let row = sqlx::query!(
+        r#"UPDATE tlab_user_account
+           SET status = 'withdrawn', updated_at = CURRENT_TIMESTAMP
+           WHERE id = $1
+           RETURNING id, name, email, status, created_at, updated_at, create_by, update_by"#,
         user_account_id
     )
     .fetch_optional(context.backend())
     .await
-    .map_err(sqlxdb::postgres::map_error)?
-    .map(|row| row.try_into())
+    .map_err(sqlxdb::postgres::map_error)?;
+
+    row.map(|row| {
+        let status = row.status.parse().map_err(|_| {
+            tlab::Error::IllegalState(format!("invalid user status: {}", row.status).into())
+        })?;
+        Ok(entity::UserAccount {
+            id: row.id,
+            name: row.name,
+            email: row.email,
+            status,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            create_by: row.create_by,
+            update_by: row.update_by,
+        })
+    })
     .transpose()
 }
 
@@ -128,11 +162,10 @@ pub async fn create_user_identity(
     provider_subject: &str,
     provider_email: Option<&str>,
 ) -> tlab::Result<entity::UserIdentity> {
-    sqlx::query_as!(
-        UserIdentityRow,
-        "INSERT INTO tlab_user_identity (user_account_id, provider, provider_subject, provider_email) \
-         VALUES ($1, $2, $3, $4) \
-         RETURNING id, user_account_id, provider, provider_subject, provider_email, created_at, last_login_at",
+    let row = sqlx::query!(
+        r#"INSERT INTO tlab_user_identity (user_account_id, provider, provider_subject, provider_email)
+           VALUES ($1, $2, $3, $4)
+           RETURNING id, user_account_id, provider, provider_subject, provider_email, created_at, last_login_at"#,
         user_account_id,
         provider.as_str(),
         provider_subject,
@@ -140,28 +173,53 @@ pub async fn create_user_identity(
     )
     .fetch_one(context.backend())
     .await
-    .map_err(sqlxdb::postgres::map_error)?
-    .try_into()
+    .map_err(sqlxdb::postgres::map_error)?;
+
+    let provider = row.provider.parse().map_err(|_| {
+        tlab::Error::IllegalState(format!("invalid provider: {}", row.provider).into())
+    })?;
+    Ok(entity::UserIdentity {
+        id: row.id,
+        user_account_id: row.user_account_id,
+        provider,
+        provider_subject: row.provider_subject,
+        provider_email: row.provider_email,
+        created_at: row.created_at,
+        last_login_at: row.last_login_at,
+    })
 }
 
 pub async fn update_user_identity(
     context: &mut AppDBCtx<'_>,
     user_identity: &entity::UserIdentity,
 ) -> tlab::Result<Option<entity::UserIdentity>> {
-    sqlx::query_as!(
-        UserIdentityRow,
-        "UPDATE tlab_user_identity \
-         SET provider_email = $1, last_login_at = $2 \
-         WHERE id = $3 \
-         RETURNING id, user_account_id, provider, provider_subject, provider_email, created_at, last_login_at",
+    let row = sqlx::query!(
+        r#"UPDATE tlab_user_identity
+           SET provider_email = $1, last_login_at = $2
+           WHERE id = $3
+           RETURNING id, user_account_id, provider, provider_subject, provider_email, created_at, last_login_at"#,
         user_identity.provider_email.as_deref(),
         user_identity.last_login_at,
         user_identity.id
     )
     .fetch_optional(context.backend())
     .await
-    .map_err(sqlxdb::postgres::map_error)?
-    .map(TryInto::try_into)
+    .map_err(sqlxdb::postgres::map_error)?;
+
+    row.map(|row| {
+        let provider = row.provider.parse().map_err(|_| {
+            tlab::Error::IllegalState(format!("invalid provider: {}", row.provider).into())
+        })?;
+        Ok(entity::UserIdentity {
+            id: row.id,
+            user_account_id: row.user_account_id,
+            provider,
+            provider_subject: row.provider_subject,
+            provider_email: row.provider_email,
+            created_at: row.created_at,
+            last_login_at: row.last_login_at,
+        })
+    })
     .transpose()
 }
 
@@ -170,7 +228,7 @@ pub async fn delete_user_identity(
     user_identity_id: i64,
 ) -> tlab::Result<()> {
     let result = sqlx::query!(
-        "DELETE FROM tlab_user_identity WHERE id = $1",
+        r#"DELETE FROM tlab_user_identity WHERE id = $1"#,
         user_identity_id
     )
     .execute(context.backend())
@@ -189,39 +247,57 @@ pub async fn create_user_credential(
     provider: entity::Provider,
     password_hash: &str,
 ) -> tlab::Result<entity::UserCredential> {
-    sqlx::query_as!(
-        UserCredentialRow,
-        "INSERT INTO tlab_user_credential (user_identity_id, provider, password_hash) \
-         VALUES ($1, $2, $3) \
-         RETURNING user_identity_id, provider, password_hash, password_changed_at",
+    let row = sqlx::query!(
+        r#"INSERT INTO tlab_user_credential (user_identity_id, provider, password_hash)
+           VALUES ($1, $2, $3)
+           RETURNING user_identity_id, provider, password_hash, password_changed_at"#,
         user_identity_id,
         provider.as_str(),
         password_hash
     )
     .fetch_one(context.backend())
     .await
-    .map_err(sqlxdb::postgres::map_error)?
-    .try_into()
+    .map_err(sqlxdb::postgres::map_error)?;
+
+    let provider = row.provider.parse().map_err(|_| {
+        tlab::Error::IllegalState(format!("invalid provider: {}", row.provider).into())
+    })?;
+    Ok(entity::UserCredential {
+        user_identity_id: row.user_identity_id,
+        provider,
+        password_hash: row.password_hash,
+        password_changed_at: row.password_changed_at,
+    })
 }
 
 pub async fn update_user_credential(
     context: &mut AppDBCtx<'_>,
     user_credential: &entity::UserCredential,
 ) -> tlab::Result<Option<entity::UserCredential>> {
-    sqlx::query_as!(
-        UserCredentialRow,
-        "UPDATE tlab_user_credential \
-         SET password_hash = $1, password_changed_at = CURRENT_TIMESTAMP \
-         WHERE user_identity_id = $2 AND provider = $3 \
-         RETURNING user_identity_id, provider, password_hash, password_changed_at",
+    let row = sqlx::query!(
+        r#"UPDATE tlab_user_credential
+           SET password_hash = $1, password_changed_at = CURRENT_TIMESTAMP
+           WHERE user_identity_id = $2 AND provider = $3
+           RETURNING user_identity_id, provider, password_hash, password_changed_at"#,
         &user_credential.password_hash,
         user_credential.user_identity_id,
         user_credential.provider.as_str()
     )
     .fetch_optional(context.backend())
     .await
-    .map_err(sqlxdb::postgres::map_error)?
-    .map(TryInto::try_into)
+    .map_err(sqlxdb::postgres::map_error)?;
+
+    row.map(|row| {
+        let provider = row.provider.parse().map_err(|_| {
+            tlab::Error::IllegalState(format!("invalid provider: {}", row.provider).into())
+        })?;
+        Ok(entity::UserCredential {
+            user_identity_id: row.user_identity_id,
+            provider,
+            password_hash: row.password_hash,
+            password_changed_at: row.password_changed_at,
+        })
+    })
     .transpose()
 }
 
@@ -230,7 +306,7 @@ pub async fn delete_user_credential(
     user_identity_id: i64,
 ) -> tlab::Result<()> {
     let result = sqlx::query!(
-        "DELETE FROM tlab_user_credential WHERE user_identity_id = $1",
+        r#"DELETE FROM tlab_user_credential WHERE user_identity_id = $1"#,
         user_identity_id
     )
     .execute(context.backend())
