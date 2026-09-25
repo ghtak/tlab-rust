@@ -1,6 +1,4 @@
-use std::sync::Arc;
-
-use crate::app_container::AppContainer;
+use crate::app_container::AppDB;
 
 const AUTH_MIGRATIONS: [(&str, &str); 3] = [
     (
@@ -17,8 +15,8 @@ const AUTH_MIGRATIONS: [(&str, &str); 3] = [
     ),
 ];
 
-pub async fn migrate(container: Arc<AppContainer>) -> tlab::Result<()> {
-    let mut tx = container.database.tx().await?;
+pub async fn migrate(database: &AppDB) -> tlab::Result<()> {
+    let mut tx = database.tx().await?;
 
     for (name, sql) in AUTH_MIGRATIONS {
         sqlx::raw_sql(sql)

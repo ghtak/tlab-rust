@@ -7,9 +7,16 @@ use std::sync::Arc;
 
 use app_config::AppConfig;
 use axum::{handler::HandlerWithoutStateExt, http::StatusCode};
+use clap::Parser;
 use tower_http::services::ServeDir;
 
-use crate::app_container::AppContainer;
+use crate::app_container::{AppContainer, AppDB};
+
+#[derive(Parser)]
+struct Args {
+    #[arg(long)]
+    migrate: bool,
+}
 
 async fn handle_404() -> (StatusCode, &'static str) {
     (StatusCode::NOT_FOUND, "Not found")
@@ -17,13 +24,19 @@ async fn handle_404() -> (StatusCode, &'static str) {
 
 #[tokio::main]
 async fn main() -> tlab::Result<()> {
+    let args = Args::parse();
+
     let config = AppConfig::load()?;
 
     tlab::tracing::initialize(&config.tracing)?;
 
-    let container = Arc::new(AppContainer::new(config).await?);
+    if args.migrate {
+        let database = AppDB::new(&config.database).await?;
+        migration::migrate(&database).await?;
+        return Ok(());
+    }
 
-    migration::migrate(container.clone()).await?;
+    let container = Arc::new(AppContainer::new(config).await?);
 
     let app = axum::Router::new().merge(auth::route::router());
 
