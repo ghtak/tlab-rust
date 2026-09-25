@@ -110,10 +110,14 @@ pub async fn find_managed_login_user(
     email: &str,
 ) -> tlab::Result<Option<entity::ManagedLoginUser>> {
     let row = sqlx::query!(
-        r#"SELECT account.id AS account_id, account.name AS account_name,
-                account.email AS account_email, account.status AS account_status,
-                account.created_at AS account_created_at, account.updated_at AS account_updated_at,
-                account.create_by AS account_create_by, account.update_by AS account_update_by,
+        r#"SELECT account.id AS account_id,
+                account.name AS account_name,
+                account.email AS account_email,
+                account.status AS account_status,
+                account.created_at AS account_created_at,
+                account.updated_at AS account_updated_at,
+                account.create_by AS account_create_by,
+                account.update_by AS account_update_by,
                 credential.user_identity_id AS credential_identity_id,
                 credential.password_hash AS password_hash,
                 credential.password_changed_at AS password_changed_at
