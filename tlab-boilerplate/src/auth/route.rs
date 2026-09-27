@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
-use axum::{extract::State, http::header, response::IntoResponse, routing::post};
-
+use axum::{extract::State, http::header, response::IntoResponse, routing::{get, post}};
 use crate::{
     app_container::AppContainer,
     app_response::AppResponse,
     auth::{
         self,
+        access_claims::AccessClaims,
         usecase::{CreateManagedUserCommand, LoginManagedUserCommand},
     },
 };
@@ -16,6 +16,7 @@ pub fn router() -> axum::Router<Arc<AppContainer>> {
         .route("/api/v1/auth/user", post(create_managed_user))
         .route("/api/v1/auth/login", post(login))
         .route("/api/v1/auth/logout", post(logout))
+        .route("/api/v1/auth/me", get(me))
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -112,4 +113,8 @@ async fn login(
 
 async fn logout(State(_container): State<Arc<AppContainer>>) -> AppResponse<()> {
     AppResponse::ok()
+}
+
+async fn me(claims: Option<AccessClaims>) -> impl IntoResponse {
+    AppResponse::data(claims.map(|claims| claims.0))
 }

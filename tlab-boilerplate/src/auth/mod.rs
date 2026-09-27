@@ -1,3 +1,4 @@
+pub mod access_claims;
 pub mod entity;
 pub mod repository;
 pub mod route;
