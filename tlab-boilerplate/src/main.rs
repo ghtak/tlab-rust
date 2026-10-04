@@ -32,7 +32,8 @@ async fn main() -> tlab::Result<()> {
 
     if args.migrate {
         let database = AppDB::new(&config.database).await?;
-        migration::migrate(&database).await?;
+        let password_hasher = tlab::hash::Argon2PasswordHasher::new(&config.password_hash)?;
+        migration::migrate(&database, &password_hasher).await?;
         return Ok(());
     }
 

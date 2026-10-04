@@ -13,7 +13,7 @@ use crate::{
 
 pub fn router() -> axum::Router<Arc<AppContainer>> {
     axum::Router::new()
-        .route("/api/v1/auth/user", post(create_managed_user))
+        // .route("/api/v1/auth/user", post(create_managed_user))
         .route("/api/v1/auth/login", post(login))
         .route("/api/v1/auth/logout", post(logout))
         .route("/api/v1/auth/me", get(me))
