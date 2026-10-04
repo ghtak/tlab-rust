@@ -105,7 +105,7 @@ mod tests {
     use crate::auth::usecase::{
         CreateManagedUserCommand, CreateManagedUserUsecase, LogoutUserCommand, LogoutUserUsecase,
     };
-    use crate::{migration_sql::AUTH_MIGRATIONS, test_db};
+    use crate::{migration::AUTH_MIGRATIONS, test_db};
     use tlab::hash::{Argon2Config, Argon2PasswordHasher, PasswordHasher};
     use tlab::jwt::{EdDsaKeyFiles, JwtCodec, JwtConfig, TokenUse};
 

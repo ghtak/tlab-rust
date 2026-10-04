@@ -4,8 +4,6 @@ mod app_container;
 mod auth;
 mod migration;
 #[cfg(test)]
-mod migration_sql;
-#[cfg(test)]
 mod test_db;
 use std::sync::Arc;
 
@@ -18,6 +16,8 @@ use crate::app_container::{AppContainer, AppDB};
 
 #[derive(Parser)]
 struct Args {
+    #[arg(long)]
+    migrate: bool,
     #[arg(long)]
     init_admin: bool,
 }
@@ -33,6 +33,12 @@ async fn main() -> tlab::Result<()> {
     let config = AppConfig::load()?;
 
     tlab::tracing::initialize(&config.tracing)?;
+
+    if args.migrate {
+        let database = AppDB::new(&config.database).await?;
+        migration::migrate(&database).await?;
+        return Ok(());
+    }
 
     if args.init_admin {
         let database = AppDB::new(&config.database).await?;

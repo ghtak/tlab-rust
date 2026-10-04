@@ -6,7 +6,7 @@ run:
 
 [working-directory: 'tlab-boilerplate']
 migrate:
-    cargo run --bin migrate
+    cargo run --bin tlab-boilerplate -- --migrate
 
 [working-directory: 'tlab-boilerplate']
 init-admin:
@@ -17,6 +17,3 @@ check:
 
 test:
     cargo test --workspace
-
-sqlx-prepare:
-    cargo sqlx prepare --workspace -- --all-targets

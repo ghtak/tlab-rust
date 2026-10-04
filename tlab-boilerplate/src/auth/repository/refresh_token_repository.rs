@@ -73,7 +73,7 @@ pub async fn delete(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{migration_sql::AUTH_MIGRATIONS, test_db};
+    use crate::{migration::AUTH_MIGRATIONS, test_db};
 
     #[tokio::test]
     #[ignore = "requires tlab-boilerplate Docker PostgreSQL service"]

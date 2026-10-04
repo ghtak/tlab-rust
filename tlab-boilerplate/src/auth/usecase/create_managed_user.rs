@@ -65,7 +65,7 @@ impl CreateManagedUserUsecase {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{migration_sql::AUTH_MIGRATIONS, test_db};
+    use crate::{migration::AUTH_MIGRATIONS, test_db};
     use tlab::hash::{PasswordHasher, Pbkdf2Config, Pbkdf2PasswordHasher};
 
     #[tokio::test]

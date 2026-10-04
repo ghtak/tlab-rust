@@ -33,7 +33,7 @@ pub async fn find_permission_codes_by_role_ids(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{migration_sql::AUTH_MIGRATIONS, test_db};
+    use crate::{migration::AUTH_MIGRATIONS, test_db};
 
     #[tokio::test]
     #[ignore = "requires tlab-boilerplate Docker PostgreSQL service"]
