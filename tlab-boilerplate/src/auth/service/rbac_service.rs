@@ -22,14 +22,12 @@ impl RbacService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{migration::AUTH_MIGRATIONS, test_db};
+    use crate::test_db;
 
     #[tokio::test]
-    #[ignore = "requires tlab-boilerplate Docker PostgreSQL service"]
     async fn checks_permissions_from_all_assigned_roles() {
         let database = test_db::connect().await;
-        let mut tx =
-            test_db::isolated_tx(&database, &[AUTH_MIGRATIONS[0].1, AUTH_MIGRATIONS[3].1]).await;
+        let mut tx = database.tx().await.unwrap();
 
         let admin_role_id: i64 =
             sqlx::query_scalar("SELECT id FROM tlab_role WHERE code = 'admin'")

@@ -186,6 +186,22 @@ pub async fn withdraw_user_account(
     row.map(UserAccountRow::into_entity).transpose()
 }
 
+pub async fn delete_user_account(
+    context: &mut AppDBCtx<'_>,
+    user_account_id: i64,
+) -> tlab::Result<()> {
+    let result = sqlx::query("DELETE FROM tlab_user_account WHERE id = $1")
+        .bind(user_account_id)
+        .execute(context.backend())
+        .await
+        .map_err(sqlxdb::postgres::map_error)?;
+
+    if result.rows_affected() == 0 {
+        return Err(tlab::Error::NotFound("user account".into()));
+    }
+    Ok(())
+}
+
 pub async fn find_managed_login_user(
     context: &mut AppDBCtx<'_>,
     email: &str,
@@ -336,14 +352,12 @@ pub async fn delete_user_credential(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{migration::AUTH_MIGRATIONS, test_db};
+    use crate::test_db;
 
     #[tokio::test]
-    #[ignore = "requires tests/docker-db-env PostgreSQL service"]
     async fn runs_user_repository_cud_with_postgres() {
         let database = test_db::connect().await;
-        let mut tx =
-            test_db::isolated_tx(&database, &[AUTH_MIGRATIONS[0].1, AUTH_MIGRATIONS[1].1]).await;
+        let mut tx = database.tx().await.unwrap();
         let mut context = tx.context();
 
         let suffix = format!(
@@ -423,6 +437,7 @@ mod tests {
                 .await
                 .is_err()
         );
+        delete_user_account(&mut context, account.id).await.unwrap();
 
         drop(context);
         tx.rollback().await.unwrap();

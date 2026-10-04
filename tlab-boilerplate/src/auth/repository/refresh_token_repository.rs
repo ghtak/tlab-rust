@@ -75,17 +75,16 @@ pub async fn delete(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{migration::AUTH_MIGRATIONS, test_db};
+    use crate::test_db;
 
     #[tokio::test]
-    #[ignore = "requires tlab-boilerplate Docker PostgreSQL service"]
     async fn stores_multiple_sessions_and_deletes_only_one() {
         let database = test_db::connect().await;
-        let mut tx =
-            test_db::isolated_tx(&database, &[AUTH_MIGRATIONS[0].1, AUTH_MIGRATIONS[2].1]).await;
+        let mut tx = database.tx().await.unwrap();
         let user_id: i64 = sqlx::query_scalar(
-            "INSERT INTO tlab_user_account (name, email) VALUES ('Alice', 'alice@example.com') RETURNING id",
+            "INSERT INTO tlab_user_account (name, email) VALUES ('Alice', $1) RETURNING id",
         )
+        .bind(test_db::unique_email("refresh-token"))
         .fetch_one(tx.context().backend())
         .await
         .unwrap();

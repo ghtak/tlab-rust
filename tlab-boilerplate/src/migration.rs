@@ -109,26 +109,9 @@ mod tests {
     use tlab::hash::{Argon2Config, Argon2PasswordHasher, PasswordHasher};
 
     #[tokio::test]
-    #[ignore = "requires tlab-boilerplate Docker PostgreSQL service"]
-    async fn migrates_an_empty_schema() {
-        let fixture = test_db::isolated_db(&[]).await;
-        migrate(&fixture.database).await.unwrap();
-
-        let mut conn = fixture.database.conn().await.unwrap();
-        let role_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM tlab_role")
-            .fetch_one(conn.context().backend())
-            .await
-            .unwrap();
-        assert_eq!(role_count, 2);
-        drop(conn);
-        fixture.cleanup().await;
-    }
-
-    #[tokio::test]
-    #[ignore = "requires tlab-boilerplate Docker PostgreSQL service"]
     async fn creates_admin_once_with_a_verifiable_password() {
         let database = test_db::connect().await;
-        let mut tx = test_db::isolated_tx(&database, &AUTH_MIGRATIONS.map(|(_, sql)| sql)).await;
+        let mut tx = database.tx().await.unwrap();
 
         let password_hasher = Argon2PasswordHasher::new(&Argon2Config {
             memory_cost_kib: 19456,

@@ -20,6 +20,6 @@
 - `src/auth/access_claims.rs`, `src/auth/permission.rs`: JWT 추출과 HTTP 권한 검사. 다른 기능에서도 인증이 필요할 때 재사용한다.
 - `src/auth/entity.rs`: `UserAccount`, `UserIdentity`, `UserCredential` 및 상태·제공자 타입
 
-DB 통합 테스트는 `src/test_db.rs`의 격리된 스키마를 사용한다. usecase처럼 자체 DB 연결을 여는 테스트에는 `isolated_db`를, 하나의 트랜잭션에서 끝나는 테스트에는 `isolated_tx`를 사용한다.
+DB 통합 테스트는 마이그레이션이 완료된 전용 테스트 DB를 사용한다. `src/test_db.rs`에서 연결을 공통으로 관리하며, 하나의 트랜잭션에서 끝나는 테스트는 롤백하고 usecase처럼 자체 DB 연결을 여는 테스트는 생성한 데이터를 종료 시 삭제한다.
 
 기능에 공통 작업이나 DB 접근이 없다면 대응 파일을 만들지 않는다. 반대로 파일이 커지거나 서로 다른 책임이 드러나면 그때 분리한다. 새로운 기능의 API 정책·도메인 규칙은 `auth`의 현재 구현에서 추정하지 말고 해당 요구사항으로 결정한다.

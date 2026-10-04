@@ -65,14 +65,12 @@ impl CreateManagedUserUsecase {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{migration::AUTH_MIGRATIONS, test_db};
+    use crate::test_db;
     use tlab::hash::{PasswordHasher, Pbkdf2Config, Pbkdf2PasswordHasher};
 
     #[tokio::test]
-    #[ignore = "requires tlab-boilerplate Docker PostgreSQL service"]
     async fn creates_a_managed_user_with_a_verified_password() {
-        let fixture = test_db::isolated_db(&[AUTH_MIGRATIONS[0].1, AUTH_MIGRATIONS[1].1]).await;
-        let app_db = fixture.database.clone();
+        let app_db = test_db::connect().await;
 
         let password_hasher = Arc::new(Pbkdf2PasswordHasher::new(&Pbkdf2Config {
             iterations: 1_000,
@@ -100,8 +98,8 @@ mod tests {
         assert_eq!(account.status, entity::UserStatus::Active);
 
         let mut connection = app_db.conn().await.unwrap();
-        let password_hash: String = sqlx::query_scalar(
-            "SELECT credential.password_hash \
+        let (identity_id, password_hash): (i64, String) = sqlx::query_as(
+            "SELECT credential.user_identity_id, credential.password_hash \
              FROM tlab_user_credential AS credential \
              JOIN tlab_user_identity AS identity ON identity.id = credential.user_identity_id \
              WHERE identity.user_account_id = $1 AND identity.provider = 'managed'",
@@ -113,8 +111,18 @@ mod tests {
         password_hasher.verify("password", &password_hash).unwrap();
         drop(connection);
 
-        drop(usecase);
-        drop(app_db);
-        fixture.cleanup().await;
+        let mut tx = app_db.tx().await.unwrap();
+        let mut context = tx.context();
+        user_repository::delete_user_credential(&mut context, identity_id)
+            .await
+            .unwrap();
+        user_repository::delete_user_identity(&mut context, identity_id)
+            .await
+            .unwrap();
+        user_repository::delete_user_account(&mut context, account.id)
+            .await
+            .unwrap();
+        drop(context);
+        tx.commit().await.unwrap();
     }
 }

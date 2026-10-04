@@ -33,18 +33,17 @@ pub async fn find_permission_codes_by_role_ids(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{migration::AUTH_MIGRATIONS, test_db};
+    use crate::test_db;
 
     #[tokio::test]
-    #[ignore = "requires tlab-boilerplate Docker PostgreSQL service"]
     async fn loads_assigned_roles_and_their_permissions() {
         let database = test_db::connect().await;
-        let mut tx =
-            test_db::isolated_tx(&database, &[AUTH_MIGRATIONS[0].1, AUTH_MIGRATIONS[3].1]).await;
+        let mut tx = database.tx().await.unwrap();
 
         let user_id: i64 = sqlx::query_scalar(
-            "INSERT INTO tlab_user_account (name, email) VALUES ('Alice', 'alice@example.com') RETURNING id",
+            "INSERT INTO tlab_user_account (name, email) VALUES ('Alice', $1) RETURNING id",
         )
+        .bind(test_db::unique_email("rbac"))
         .fetch_one(tx.context().backend())
         .await
         .unwrap();
@@ -86,7 +85,7 @@ mod tests {
             [admin_role_id, sales_role_id]
         );
         assert!(
-            find_role_ids_by_user_account_id(&mut tx.context(), user_id + 1)
+            find_role_ids_by_user_account_id(&mut tx.context(), -1)
                 .await
                 .unwrap()
                 .is_empty()
