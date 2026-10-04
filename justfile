@@ -9,6 +9,11 @@ migrate:
     cargo run --bin tlab-boilerplate -- --migrate
 
 [working-directory: 'tlab-boilerplate']
+[env('TLAB_DATABASE__URL', 'postgres://tlab-test:tlab-test@localhost:35432/tlab-test')]
+migrate-test:
+    cargo run --bin tlab-boilerplate -- --migrate
+
+[working-directory: 'tlab-boilerplate']
 init-admin:
     cargo run --bin tlab-boilerplate -- --init-admin
 

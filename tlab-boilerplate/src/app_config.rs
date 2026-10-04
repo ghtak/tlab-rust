@@ -23,7 +23,9 @@ impl AppConfig {
             config_file_name
         };
 
-        let config = Loader::from_file(config_file_full_path).try_deserialize::<AppConfig>()?;
+        let config = Loader::from_file(config_file_full_path)
+            .env_prefix("TLAB")
+            .try_deserialize::<AppConfig>()?;
         Ok(config)
     }
 }

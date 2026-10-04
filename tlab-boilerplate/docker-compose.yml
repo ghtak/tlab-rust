@@ -13,3 +13,17 @@ services:
       interval: 5s
       timeout: 5s
       retries: 12
+
+  postgres-test:
+    image: postgres:17-alpine
+    ports:
+      - "35432:5432"
+    environment:
+      POSTGRES_DB: tlab-test
+      POSTGRES_USER: tlab-test
+      POSTGRES_PASSWORD: tlab-test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tlab -d tlab"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
