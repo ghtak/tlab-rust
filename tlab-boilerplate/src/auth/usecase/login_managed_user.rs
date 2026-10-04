@@ -2,8 +2,12 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use sha2::{Digest, Sha256};
+use uuid::Uuid;
 
-use crate::auth::repository::{rbac_repository, refresh_token_repository, user_repository};
+use crate::auth::{
+    access_claims::AppClaims,
+    repository::{rbac_repository, refresh_token_repository, user_repository},
+};
 use crate::{app_container::AppDB, auth::entity};
 
 //dummy login password
@@ -63,18 +67,29 @@ impl LoginManagedUserUsecase {
         let role_ids =
             rbac_repository::find_role_ids_by_user_account_id(&mut conn.context(), account.id)
                 .await?;
-        let tokens = self.jwt_codec.issue_pair(
-            &account.id.to_string(),
-            Some(serde_json::json!({ "role_ids": role_ids })),
-        )?;
+        let session_id = Uuid::new_v4();
+        let app = serde_json::to_value(AppClaims {
+            role_ids,
+            session_id,
+        })
+        .map_err(anyhow::Error::from)?;
+        let tokens = self
+            .jwt_codec
+            .issue_pair(&account.id.to_string(), Some(app))?;
         let token_hash: [u8; 32] = Sha256::digest(tokens.refresh.token.as_bytes()).into();
         let expires_at = i64::try_from(tokens.refresh.expires_at)
             .ok()
             .and_then(|timestamp| DateTime::<Utc>::from_timestamp(timestamp, 0))
             .ok_or_else(|| tlab::Error::IllegalState("invalid refresh token expiration".into()))?;
 
-        refresh_token_repository::save(&mut conn.context(), account.id, &token_hash, expires_at)
-            .await?;
+        refresh_token_repository::save(
+            &mut conn.context(),
+            session_id,
+            account.id,
+            &token_hash,
+            expires_at,
+        )
+        .await?;
 
         Ok(LoginManagedUserResult { account, tokens })
     }
@@ -84,7 +99,7 @@ impl LoginManagedUserUsecase {
 mod tests {
     use super::*;
     use crate::auth::usecase::{
-        CreateManagedUserCommand, CreateManagedUserUsecase, LogoutUserUsecase,
+        CreateManagedUserCommand, CreateManagedUserUsecase, LogoutUserCommand, LogoutUserUsecase,
     };
     use tlab::hash::{Argon2Config, Argon2PasswordHasher, PasswordHasher};
     use tlab::jwt::{EdDsaKeyFiles, JwtCodec, JwtConfig, TokenUse};
@@ -183,9 +198,6 @@ mod tests {
 
     async fn delete_user(app_db: &AppDB, user_id: i64) {
         let mut tx = app_db.tx().await.unwrap();
-        refresh_token_repository::delete(&mut tx.context(), user_id)
-            .await
-            .unwrap();
         sqlx::query(
             "DELETE FROM tlab_user_credential \
              WHERE user_identity_id IN (SELECT id FROM tlab_user_identity WHERE user_account_id = $1)",
@@ -242,19 +254,20 @@ mod tests {
         let refresh = jwt_codec.verify(&logged_in.tokens.refresh.token).unwrap();
         assert_eq!(access.sub, account.id.to_string());
         assert_eq!(access.token_use, TokenUse::Access);
-        assert_eq!(
-            access.app,
-            Some(serde_json::json!({ "role_ids": [role_id] }))
-        );
+        let app = access.app.unwrap();
+        assert_eq!(app["role_ids"], serde_json::json!([role_id]));
+        let session_id = Uuid::parse_str(app["session_id"].as_str().unwrap()).unwrap();
         assert_eq!(refresh.token_use, TokenUse::Refresh);
-        assert!(refresh.app.is_none());
+        assert_eq!(refresh.app, Some(app));
 
         let mut conn = app_db.conn().await.unwrap();
         let stored =
-            refresh_token_repository::find_by_user_account_id(&mut conn.context(), account.id)
+            refresh_token_repository::find_all_by_user_account_id(&mut conn.context(), account.id)
                 .await
-                .unwrap()
                 .unwrap();
+        assert_eq!(stored.len(), 1);
+        let stored = &stored[0];
+        assert_eq!(stored.session_id, session_id);
         let expected_hash: [u8; 32] =
             Sha256::digest(logged_in.tokens.refresh.token.as_bytes()).into();
         assert_eq!(stored.token_hash, expected_hash);
@@ -265,40 +278,73 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires tlab-boilerplate Docker PostgreSQL service"]
-    async fn logout_removes_the_saved_refresh_token() {
+    async fn logout_removes_only_the_selected_session() {
         let app_db = database().await;
         let hasher = password_hasher();
         let account = create_user(&app_db, &hasher).await;
-        let login = LoginManagedUserUsecase::new(app_db.clone(), hasher, jwt_codec());
-        login
+        let jwt_codec = jwt_codec();
+        let login = LoginManagedUserUsecase::new(app_db.clone(), hasher, jwt_codec.clone());
+        let first = login
             .execute(&LoginManagedUserCommand {
                 email: account.email.clone(),
                 password: "correct password".into(),
             })
             .await
             .unwrap();
+        let second = login
+            .execute(&LoginManagedUserCommand {
+                email: account.email.clone(),
+                password: "correct password".into(),
+            })
+            .await
+            .unwrap();
+        assert_ne!(first.tokens.refresh.token, second.tokens.refresh.token);
+        let first_app = jwt_codec
+            .verify(&first.tokens.access.token)
+            .unwrap()
+            .app
+            .unwrap();
+        let second_app = jwt_codec
+            .verify(&second.tokens.access.token)
+            .unwrap()
+            .app
+            .unwrap();
+        let first_session_id = Uuid::parse_str(first_app["session_id"].as_str().unwrap()).unwrap();
+        let second_session_id =
+            Uuid::parse_str(second_app["session_id"].as_str().unwrap()).unwrap();
+        assert_ne!(first_session_id, second_session_id);
 
         let mut conn = app_db.conn().await.unwrap();
-        assert!(
-            refresh_token_repository::find_by_user_account_id(&mut conn.context(), account.id)
+        assert_eq!(
+            refresh_token_repository::find_all_by_user_account_id(&mut conn.context(), account.id)
                 .await
                 .unwrap()
-                .is_some()
+                .len(),
+            2
         );
         drop(conn);
 
         let logout = LogoutUserUsecase::new(app_db.clone());
-        logout.execute(account.id).await.unwrap();
-        logout.execute(account.id).await.unwrap();
+        let command = LogoutUserCommand {
+            user_account_id: account.id,
+            session_id: first_session_id,
+        };
+        logout.execute(&command).await.unwrap();
+        logout.execute(&command).await.unwrap();
 
         let mut conn = app_db.conn().await.unwrap();
-        assert!(
-            refresh_token_repository::find_by_user_account_id(&mut conn.context(), account.id)
+        let remaining =
+            refresh_token_repository::find_all_by_user_account_id(&mut conn.context(), account.id)
                 .await
-                .unwrap()
-                .is_none()
-        );
+                .unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].session_id, second_session_id);
         drop(conn);
+        let command = LogoutUserCommand {
+            user_account_id: account.id,
+            session_id: second_session_id,
+        };
+        logout.execute(&command).await.unwrap();
         delete_user(&app_db, account.id).await;
     }
 
@@ -336,10 +382,10 @@ mod tests {
         assert!(matches!(result, Err(tlab::Error::InvalidCredentials)));
         let mut conn = app_db.conn().await.unwrap();
         assert!(
-            refresh_token_repository::find_by_user_account_id(&mut conn.context(), account.id)
+            refresh_token_repository::find_all_by_user_account_id(&mut conn.context(), account.id)
                 .await
                 .unwrap()
-                .is_none()
+                .is_empty()
         );
         drop(conn);
         delete_user(&app_db, account.id).await;

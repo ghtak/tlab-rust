@@ -181,14 +181,14 @@ impl JwtCodec {
             TokenUse::Access,
             issued_at,
             self.access_token_ttl_seconds,
-            app,
+            app.clone(),
         )?;
         let refresh = self.issue(
             subject,
             TokenUse::Refresh,
             issued_at,
             self.refresh_token_ttl_seconds,
-            None,
+            app,
         )?;
         Ok(TokenPair { access, refresh })
     }
@@ -329,14 +329,17 @@ mod tests {
     }
 
     #[test]
-    fn includes_app_data_only_in_access_token() {
+    fn includes_app_data_in_both_tokens() {
         let keys = TestKeys::new();
         let codec = JwtCodec::new(&keys.config()).unwrap();
         let app = serde_json::json!({ "role_ids": [1, 2] });
         let pair = codec.issue_pair("user-42", Some(app.clone())).unwrap();
 
-        assert_eq!(codec.verify(&pair.access.token).unwrap().app, Some(app));
-        assert!(codec.verify(&pair.refresh.token).unwrap().app.is_none());
+        assert_eq!(
+            codec.verify(&pair.access.token).unwrap().app,
+            Some(app.clone())
+        );
+        assert_eq!(codec.verify(&pair.refresh.token).unwrap().app, Some(app));
     }
 
     #[test]

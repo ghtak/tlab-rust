@@ -7,7 +7,9 @@ use crate::{
         self,
         access_claims::AccessClaims,
         permission,
-        usecase::{CreateManagedUserCommand, LoginManagedUserCommand, LogoutUserUsecase},
+        usecase::{
+            CreateManagedUserCommand, LoginManagedUserCommand, LogoutUserCommand, LogoutUserUsecase,
+        },
     },
 };
 use axum::{
@@ -128,13 +130,12 @@ async fn login(
 }
 
 async fn logout(State(container): State<Arc<AppContainer>>, claims: AccessClaims) -> ApiResult<()> {
-    let user_account_id = claims
-        .jwt
-        .sub
-        .parse::<i64>()
-        .map_err(|_| ApiResponse::unauthorized("invalid token"))?;
+    let command = LogoutUserCommand {
+        user_account_id: claims.user_account_id()?,
+        session_id: claims.app.session_id,
+    };
     LogoutUserUsecase::new(container.database.clone())
-        .execute(user_account_id)
+        .execute(&command)
         .await
         .map_err(|error| {
             tracing::error!(?error, "Failed to log out user");

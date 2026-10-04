@@ -5,40 +5,11 @@ use crate::{
 
 const ADMIN_EMAIL: &str = "admin@localhost";
 
-pub(crate) const AUTH_MIGRATIONS: [(&str, &str); 4] = [
-    (
-        "001_create_user_account.sql",
-        include_str!("auth/migrations/001_create_user_account.sql"),
-    ),
-    (
-        "002_create_user_identity_and_credential.sql",
-        include_str!("auth/migrations/002_create_user_identity_and_credential.sql"),
-    ),
-    (
-        "003_create_refresh_token.sql",
-        include_str!("auth/migrations/003_create_refresh_token.sql"),
-    ),
-    (
-        "004_create_rbac.sql",
-        include_str!("auth/migrations/004_create_rbac.sql"),
-    ),
-];
-
-pub async fn migrate(
+pub async fn initialize_admin(
     database: &AppDB,
     password_hasher: &dyn tlab::hash::PasswordHasher,
 ) -> tlab::Result<()> {
     let mut tx = database.tx().await?;
-
-    for (name, sql) in AUTH_MIGRATIONS {
-        sqlx::raw_sql(sql)
-            .execute(tx.context().backend())
-            .await
-            .map_err(|source| tlab::Error::DbDriver {
-                source: source.into(),
-            })?;
-        tracing::info!(migration = name, "Migration applied");
-    }
 
     create_admin_user_if_missing(&mut tx.context(), password_hasher).await?;
 
@@ -102,7 +73,7 @@ async fn create_admin_user_if_missing(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_db;
+    use crate::{migration_sql::AUTH_MIGRATIONS, test_db};
     use tlab::hash::{Argon2Config, Argon2PasswordHasher, PasswordHasher};
 
     #[tokio::test]

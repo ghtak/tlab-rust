@@ -91,6 +91,7 @@ pub struct ManagedLoginUser {
 
 #[derive(Debug, Clone)]
 pub struct RefreshToken {
+    pub session_id: uuid::Uuid,
     pub user_account_id: i64,
     pub token_hash: Vec<u8>,
     pub created_at: chrono::DateTime<chrono::Utc>,

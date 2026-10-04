@@ -20,11 +20,12 @@ struct AccessClaims {
 
 struct AppClaims {
     role_ids: Vec<i64>,
+    session_id: Uuid,
 }
 ```
 
-- 비밀번호 확인 후 DB에서 현재 역할 ID를 조회해 **access token에만** `app: { "role_ids": [...] }`를 넣는다. refresh token에는 앱 역할 데이터를 넣지 않는다. `issue_pair(subject, app)`으로 발급 인자를 확장하고 앱 데이터가 없는 사용처는 `None`을 전달한다.
-- `AccessClaims` 추출기는 서명·만료·발급자·대상·`TokenUse::Access`를 검증한 뒤 `app.role_ids`를 정수 배열로 파싱한다. `app`이 없는 기존 토큰은 빈 역할 ID 목록으로 처리하고, `app`은 있는데 `role_ids`가 없거나 형식이 잘못되면 401로 거부한다. 역할 ID는 신뢰할 수 있는 DB 조회 결과로만 발급한다.
+- 비밀번호 확인 후 DB에서 현재 역할 ID를 조회하고 새 `session_id`를 생성한다. `issue_pair(subject, app)`으로 access·refresh token에 같은 `app: { "role_ids": [...], "session_id": "..." }`를 넣고, DB에는 세션별 refresh token 해시를 저장한다. refresh 기능을 구현할 때 역할 ID는 토큰에서 재사용하지 않고 DB에서 다시 조회한다.
+- `AccessClaims` 추출기는 서명·만료·발급자·대상·`TokenUse::Access`를 검증한 뒤 `app`을 `AppClaims`로 파싱한다. 계정 ID가 필요한 경로는 `user_account_id()`로 `sub`를 파싱하며, 정수가 아니면 401로 거부한다. `app`에 필수 필드가 없어도 401로 거부한다. 역할 ID는 신뢰할 수 있는 DB 조회 결과로만 발급한다.
 - 현재 `Option<AccessClaims>` 추출은 `/me`에 유지한다. 보호된 경로에는 Bearer 토큰을 필수로 요구하는 추출을 제공하고, 두 추출 방식은 같은 검증 함수를 사용한다. 토큰 없음·무효는 401, 유효한 토큰에 필요한 퍼미션이 없음은 403으로 구분한다.
 
 ## 구현 순서
@@ -41,4 +42,4 @@ struct AppClaims {
 
 - 역할이 없거나 필요한 퍼미션이 없는 사용자는 보호된 작업을 수행할 수 없고, `admin`의 `user:manage`는 허용된다.
 - 토큰 없음, 잘못된 서명·토큰 종류·`app` 형식은 거부한다. `app`이 없는 기존 access token은 인증되더라도 RBAC 퍼미션이 없다.
-- access token에는 역할 ID가 들어가고 refresh token에는 들어가지 않는다. 역할·퍼미션 조회는 기존 RBAC 마이그레이션의 관계와 일치한다.
+- access·refresh token에는 같은 세션 ID가 들어가고, 로그아웃은 해당 사용자의 해당 세션 refresh token만 삭제한다. 이미 발급된 access token은 만료 전까지 유효하다.

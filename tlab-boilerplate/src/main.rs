@@ -4,6 +4,8 @@ mod app_container;
 mod auth;
 mod migration;
 #[cfg(test)]
+mod migration_sql;
+#[cfg(test)]
 mod test_db;
 use std::sync::Arc;
 
@@ -17,7 +19,7 @@ use crate::app_container::{AppContainer, AppDB};
 #[derive(Parser)]
 struct Args {
     #[arg(long)]
-    migrate: bool,
+    init_admin: bool,
 }
 
 async fn handle_404() -> (StatusCode, &'static str) {
@@ -32,10 +34,10 @@ async fn main() -> tlab::Result<()> {
 
     tlab::tracing::initialize(&config.tracing)?;
 
-    if args.migrate {
+    if args.init_admin {
         let database = AppDB::new(&config.database).await?;
         let password_hasher = tlab::hash::Argon2PasswordHasher::new(&config.password_hash)?;
-        migration::migrate(&database, &password_hasher).await?;
+        migration::initialize_admin(&database, &password_hasher).await?;
         return Ok(());
     }
 
