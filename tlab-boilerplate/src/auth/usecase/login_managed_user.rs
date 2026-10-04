@@ -83,7 +83,9 @@ impl LoginManagedUserUsecase {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::auth::usecase::{CreateManagedUserCommand, CreateManagedUserUsecase};
+    use crate::auth::usecase::{
+        CreateManagedUserCommand, CreateManagedUserUsecase, LogoutUserUsecase,
+    };
     use tlab::hash::{Argon2Config, Argon2PasswordHasher, PasswordHasher};
     use tlab::jwt::{EdDsaKeyFiles, JwtCodec, JwtConfig, TokenUse};
 
@@ -257,6 +259,45 @@ mod tests {
             Sha256::digest(logged_in.tokens.refresh.token.as_bytes()).into();
         assert_eq!(stored.token_hash, expected_hash);
         assert_eq!(stored.expires_at.timestamp(), refresh.exp as i64);
+        drop(conn);
+        delete_user(&app_db, account.id).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires tlab-boilerplate Docker PostgreSQL service"]
+    async fn logout_removes_the_saved_refresh_token() {
+        let app_db = database().await;
+        let hasher = password_hasher();
+        let account = create_user(&app_db, &hasher).await;
+        let login = LoginManagedUserUsecase::new(app_db.clone(), hasher, jwt_codec());
+        login
+            .execute(&LoginManagedUserCommand {
+                email: account.email.clone(),
+                password: "correct password".into(),
+            })
+            .await
+            .unwrap();
+
+        let mut conn = app_db.conn().await.unwrap();
+        assert!(
+            refresh_token_repository::find_by_user_account_id(&mut conn.context(), account.id)
+                .await
+                .unwrap()
+                .is_some()
+        );
+        drop(conn);
+
+        let logout = LogoutUserUsecase::new(app_db.clone());
+        logout.execute(account.id).await.unwrap();
+        logout.execute(account.id).await.unwrap();
+
+        let mut conn = app_db.conn().await.unwrap();
+        assert!(
+            refresh_token_repository::find_by_user_account_id(&mut conn.context(), account.id)
+                .await
+                .unwrap()
+                .is_none()
+        );
         drop(conn);
         delete_user(&app_db, account.id).await;
     }

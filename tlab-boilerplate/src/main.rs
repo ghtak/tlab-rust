@@ -1,6 +1,6 @@
+mod api_response;
 mod app_config;
 mod app_container;
-mod app_response;
 mod auth;
 mod migration;
 #[cfg(test)]

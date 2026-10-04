@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
 use crate::{
+    api_response::{ApiResponse, ApiResult},
     app_container::AppContainer,
-    app_response::AppResponse,
     auth::{
         self,
         access_claims::AccessClaims,
-        usecase::{CreateManagedUserCommand, LoginManagedUserCommand},
+        permission,
+        usecase::{CreateManagedUserCommand, LoginManagedUserCommand, LogoutUserUsecase},
     },
 };
 use axum::{
@@ -18,7 +19,7 @@ use axum::{
 
 pub fn router() -> axum::Router<Arc<AppContainer>> {
     axum::Router::new()
-        // .route("/api/v1/auth/user", post(create_managed_user))
+        .route("/api/v1/auth/user", post(create_managed_user))
         .route("/api/v1/auth/login", post(login))
         .route("/api/v1/auth/logout", post(logout))
         .route("/api/v1/auth/me", get(me))
@@ -41,8 +42,11 @@ struct CreateManagedUserResponse {
 
 async fn create_managed_user(
     State(container): State<Arc<AppContainer>>,
+    claims: AccessClaims,
     axum::Json(request): axum::Json<CreateManagedUserRequest>,
-) -> AppResponse<CreateManagedUserResponse> {
+) -> ApiResult<CreateManagedUserResponse> {
+    permission::require(&container, &claims, permission::USER_MANAGE).await?;
+
     let command = CreateManagedUserCommand {
         name: request.name,
         email: request.email,
@@ -54,21 +58,23 @@ async fn create_managed_user(
         container.password_hasher.clone(),
     );
 
-    let resp = usecase.execute(&command).await;
+    let user = usecase
+        .execute(&command)
+        .await
+        .map_err(|error| match error {
+            tlab::Error::Conflict(_) => ApiResponse::conflict("user already exists"),
+            error => {
+                tracing::error!(?error, "Failed to create managed user");
+                ApiResponse::internal_error("failed to create user")
+            }
+        })?;
 
-    match resp {
-        Ok(user) => AppResponse::created(CreateManagedUserResponse {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            status: user.status.as_str().to_owned(),
-        }),
-        Err(tlab::Error::Conflict(_)) => AppResponse::conflict("user already exists"),
-        Err(error) => {
-            tracing::error!(?error, "Failed to create managed user");
-            AppResponse::internal_error("failed to create user")
-        }
-    }
+    Ok(ApiResponse::created(CreateManagedUserResponse {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        status: user.status.as_str().to_owned(),
+    }))
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -88,7 +94,7 @@ struct LoginManagedUserResponse {
 async fn login(
     State(container): State<Arc<AppContainer>>,
     axum::Json(request): axum::Json<LoginManagedUserRequest>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, ApiResponse<()>> {
     let command = LoginManagedUserCommand {
         email: request.email,
         password: request.password,
@@ -99,27 +105,49 @@ async fn login(
         container.jwt_codec.clone(),
     );
 
-    let response = match usecase.execute(&command).await {
-        Ok(result) => AppResponse::data(LoginManagedUserResponse {
+    let result = usecase
+        .execute(&command)
+        .await
+        .map_err(|error| match error {
+            tlab::Error::InvalidCredentials => ApiResponse::unauthorized("invalid credentials"),
+            error => {
+                tracing::error!(?error, "Failed to log in managed user");
+                ApiResponse::internal_error("failed to log in")
+            }
+        })?;
+
+    Ok((
+        [(header::CACHE_CONTROL, "no-store")],
+        ApiResponse::data(LoginManagedUserResponse {
             access_token: result.tokens.access.token,
             refresh_token: result.tokens.refresh.token,
             token_type: "Bearer",
             expires_in: container.config.jwt.access_token_ttl_seconds,
         }),
-        Err(tlab::Error::InvalidCredentials) => AppResponse::unauthorized("invalid credentials"),
-        Err(error) => {
-            tracing::error!(?error, "Failed to log in managed user");
-            AppResponse::internal_error("failed to log in")
-        }
-    };
-
-    ([(header::CACHE_CONTROL, "no-store")], response)
+    ))
 }
 
-async fn logout(State(_container): State<Arc<AppContainer>>) -> AppResponse<()> {
-    AppResponse::ok()
+async fn logout(State(container): State<Arc<AppContainer>>, claims: AccessClaims) -> ApiResult<()> {
+    let user_account_id = claims
+        .jwt
+        .sub
+        .parse::<i64>()
+        .map_err(|_| ApiResponse::unauthorized("invalid token"))?;
+    LogoutUserUsecase::new(container.database.clone())
+        .execute(user_account_id)
+        .await
+        .map_err(|error| {
+            tracing::error!(?error, "Failed to log out user");
+            ApiResponse::internal_error("failed to log out")
+        })?;
+
+    Ok(ApiResponse::ok())
 }
 
-async fn me(claims: Option<AccessClaims>) -> impl IntoResponse {
-    AppResponse::data(claims.map(|claims| claims.jwt))
+async fn me(
+    State(container): State<Arc<AppContainer>>,
+    claims: AccessClaims,
+) -> ApiResult<tlab::jwt::JwtClaims> {
+    permission::require(&container, &claims, permission::USER_MANAGE).await?;
+    Ok(ApiResponse::data(claims.jwt))
 }

@@ -13,6 +13,7 @@ pub struct AppContainer {
     pub database: Arc<AppDB>,
     pub password_hasher: Arc<dyn tlab::hash::PasswordHasher>,
     pub jwt_codec: Arc<tlab::jwt::JwtCodec>,
+    pub rbac_service: Arc<crate::auth::service::RbacService>,
 }
 
 impl AppContainer {
@@ -28,6 +29,7 @@ impl AppContainer {
             database,
             password_hasher,
             jwt_codec,
+            rbac_service: Arc::new(crate::auth::service::RbacService {}),
         })
     }
 }

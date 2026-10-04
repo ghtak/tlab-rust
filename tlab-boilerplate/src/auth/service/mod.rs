@@ -1,12 +1,12 @@
-pub mod rbac_service;
+mod rbac_service;
 
-use crate::auth::entity;
+pub use rbac_service::RbacService;
 
-pub trait UserService {
-    // async fn create_user(
-    //     &self,
-    //     name: &str,
-    //     email: &str,
-    //     password: &str,
-    // ) -> tlab::Result<entity::UserAccount>;
-}
+// pub trait UserService {
+//     // async fn create_user(
+//     //     &self,
+//     //     name: &str,
+//     //     email: &str,
+//     //     password: &str,
+//     // ) -> tlab::Result<entity::UserAccount>;
+// }

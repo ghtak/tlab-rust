@@ -7,7 +7,7 @@ use axum::{
 use serde::Deserialize;
 use tlab::jwt::{JwtClaims, JwtCodec, TokenUse};
 
-use crate::{app_container::AppContainer, app_response::AppResponse};
+use crate::{api_response::ApiResponse, app_container::AppContainer};
 
 pub struct AccessClaims {
     pub jwt: JwtClaims,
@@ -20,7 +20,7 @@ pub struct AppClaims {
 }
 
 impl FromRequestParts<Arc<AppContainer>> for AccessClaims {
-    type Rejection = AppResponse<()>;
+    type Rejection = ApiResponse<()>;
 
     async fn from_request_parts(
         parts: &mut Parts,
@@ -31,7 +31,7 @@ impl FromRequestParts<Arc<AppContainer>> for AccessClaims {
 }
 
 impl OptionalFromRequestParts<Arc<AppContainer>> for AccessClaims {
-    type Rejection = AppResponse<()>;
+    type Rejection = ApiResponse<()>;
 
     async fn from_request_parts(
         parts: &mut Parts,
@@ -44,19 +44,19 @@ impl OptionalFromRequestParts<Arc<AppContainer>> for AccessClaims {
 fn extract_required_claims(
     authorization: Option<&HeaderValue>,
     codec: &JwtCodec,
-) -> Result<AccessClaims, AppResponse<()>> {
-    extract_claims(authorization, codec)?.ok_or_else(|| AppResponse::unauthorized("invalid token"))
+) -> Result<AccessClaims, ApiResponse<()>> {
+    extract_claims(authorization, codec)?.ok_or_else(|| ApiResponse::unauthorized("invalid token"))
 }
 
 fn extract_claims(
     authorization: Option<&HeaderValue>,
     codec: &JwtCodec,
-) -> Result<Option<AccessClaims>, AppResponse<()>> {
+) -> Result<Option<AccessClaims>, ApiResponse<()>> {
     let Some(authorization) = authorization else {
         return Ok(None);
     };
 
-    let invalid_token = || AppResponse::unauthorized("invalid token");
+    let invalid_token = || ApiResponse::unauthorized("invalid token");
     let value = authorization.to_str().map_err(|_| invalid_token())?;
     let (scheme, token) = value.split_once(' ').ok_or_else(invalid_token)?;
     if !scheme.eq_ignore_ascii_case("Bearer")

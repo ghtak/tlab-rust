@@ -2,7 +2,7 @@ use axum::response::IntoResponse;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
-pub struct AppResponse<T> {
+pub struct ApiResponse<T> {
     #[serde(skip)]
     pub status_code: axum::http::StatusCode,
 
@@ -13,31 +13,15 @@ pub struct AppResponse<T> {
     pub error: Option<String>,
 }
 
-impl AppResponse<()> {
+pub type ApiResult<T> = Result<ApiResponse<T>, ApiResponse<()>>;
+
+impl ApiResponse<()> {
     pub fn ok() -> Self {
         Self {
             status_code: axum::http::StatusCode::OK,
             data: None,
             error: None,
         }
-    }
-}
-
-impl<T> AppResponse<T> {
-    pub fn new(status_code: axum::http::StatusCode, data: T) -> Self {
-        Self {
-            status_code: status_code,
-            data: Some(data),
-            error: None,
-        }
-    }
-
-    pub fn data(data: T) -> Self {
-        Self::new(axum::http::StatusCode::OK, data)
-    }
-
-    pub fn created(data: T) -> Self {
-        Self::new(axum::http::StatusCode::CREATED, data)
     }
 
     pub fn bad_request(message: impl Into<String>) -> Self {
@@ -73,7 +57,25 @@ impl<T> AppResponse<T> {
     }
 }
 
-impl<T: Serialize> IntoResponse for AppResponse<T> {
+impl<T> ApiResponse<T> {
+    pub fn new(status_code: axum::http::StatusCode, data: T) -> Self {
+        Self {
+            status_code: status_code,
+            data: Some(data),
+            error: None,
+        }
+    }
+
+    pub fn data(data: T) -> Self {
+        Self::new(axum::http::StatusCode::OK, data)
+    }
+
+    pub fn created(data: T) -> Self {
+        Self::new(axum::http::StatusCode::CREATED, data)
+    }
+}
+
+impl<T: Serialize> IntoResponse for ApiResponse<T> {
     fn into_response(self) -> axum::response::Response {
         (self.status_code, axum::Json(self)).into_response()
     }
@@ -84,10 +86,10 @@ mod tests {
     use axum::{body::to_bytes, http::StatusCode, response::IntoResponse};
     use serde_json::json;
 
-    use super::AppResponse;
+    use super::ApiResponse;
 
     async fn assert_response<T: serde::Serialize>(
-        response: AppResponse<T>,
+        response: ApiResponse<T>,
         expected_status: StatusCode,
         expected_body: serde_json::Value,
     ) {
@@ -103,13 +105,13 @@ mod tests {
 
     #[tokio::test]
     async fn responds_with_ok() {
-        assert_response(AppResponse::ok(), StatusCode::OK, json!({})).await;
+        assert_response(ApiResponse::ok(), StatusCode::OK, json!({})).await;
     }
 
     #[tokio::test]
     async fn responds_with_success_data() {
         assert_response(
-            AppResponse::data(json!({ "id": "order-1" })),
+            ApiResponse::data(json!({ "id": "order-1" })),
             StatusCode::OK,
             json!({ "data": { "id": "order-1" } }),
         )
@@ -119,7 +121,7 @@ mod tests {
     #[tokio::test]
     async fn responds_with_created_data() {
         assert_response(
-            AppResponse::created(json!({ "id": "order-1" })),
+            ApiResponse::created(json!({ "id": "order-1" })),
             StatusCode::CREATED,
             json!({ "data": { "id": "order-1" } }),
         )
@@ -129,7 +131,7 @@ mod tests {
     #[tokio::test]
     async fn responds_with_not_found_error() {
         assert_response(
-            AppResponse::<()>::not_found("Order not found"),
+            ApiResponse::not_found("Order not found"),
             StatusCode::NOT_FOUND,
             json!({ "error": "Order not found" }),
         )
