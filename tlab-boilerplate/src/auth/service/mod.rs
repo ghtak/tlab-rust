@@ -1,3 +1,5 @@
+pub mod rbac_service;
+
 use crate::auth::entity;
 
 pub trait UserService {
