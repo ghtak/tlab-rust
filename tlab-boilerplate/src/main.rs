@@ -3,6 +3,8 @@ mod app_container;
 mod app_response;
 mod auth;
 mod migration;
+#[cfg(test)]
+mod test_db;
 use std::sync::Arc;
 
 use app_config::AppConfig;

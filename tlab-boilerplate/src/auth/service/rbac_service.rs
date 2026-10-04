@@ -22,42 +22,14 @@ impl RbacService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app_container::AppDB;
+    use crate::{migration::AUTH_MIGRATIONS, test_db};
 
     #[tokio::test]
     #[ignore = "requires tlab-boilerplate Docker PostgreSQL service"]
     async fn checks_permissions_from_all_assigned_roles() {
-        let database = AppDB::new(&tlab::sqlxdb::Config {
-            url: "postgres://tlab:tlab@localhost:25432/tlab".into(),
-            max_connections: 1,
-        })
-        .await
-        .unwrap();
-        let mut tx = database.tx().await.unwrap();
-        let schema = format!(
-            "rbac_service_test_{}_{}",
-            std::process::id(),
-            chrono::Utc::now().timestamp_nanos_opt().unwrap()
-        );
-
-        sqlx::query(sqlx::AssertSqlSafe(format!("CREATE SCHEMA {schema}")))
-            .execute(tx.context().backend())
-            .await
-            .unwrap();
-        sqlx::query_scalar::<_, String>("SELECT set_config('search_path', $1, true)")
-            .bind(&schema)
-            .fetch_one(tx.context().backend())
-            .await
-            .unwrap();
-        for sql in [
-            include_str!("../migrations/001_create_user_account.sql"),
-            include_str!("../migrations/004_create_rbac.sql"),
-        ] {
-            sqlx::raw_sql(sql)
-                .execute(tx.context().backend())
-                .await
-                .unwrap();
-        }
+        let database = test_db::connect().await;
+        let mut tx =
+            test_db::isolated_tx(&database, &[AUTH_MIGRATIONS[0].1, AUTH_MIGRATIONS[3].1]).await;
 
         let admin_role_id: i64 =
             sqlx::query_scalar("SELECT id FROM tlab_role WHERE code = 'admin'")
