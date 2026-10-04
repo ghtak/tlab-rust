@@ -4,11 +4,11 @@ use chrono::{DateTime, Utc};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
+use crate::app_container::AppDB;
 use crate::auth::{
     access_claims::AppClaims,
     repository::{rbac_repository, refresh_token_repository, user_repository},
 };
-use crate::{app_container::AppDB};
 
 //dummy login password
 const DUMMY_LOGIN_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$o90CMRSOfYxJu7s/gJVLzA$QRg9RtFOtSICuubzdE+iJbUo0ct1tJxphWFyp/OLCXo";
@@ -57,6 +57,10 @@ impl LoginManagedUserUsecase {
             return Err(tlab::Error::InvalidCredentials);
         };
 
+        if managed_login_user.account.status != crate::auth::entity::UserStatus::Active {
+            return Err(tlab::Error::InvalidCredentials);
+        }
+
         self.password_hasher.verify(
             &command.password,
             &managed_login_user.credential.password_hash,
@@ -101,39 +105,12 @@ mod tests {
     use crate::auth::usecase::{
         CreateManagedUserCommand, CreateManagedUserUsecase, LogoutUserCommand, LogoutUserUsecase,
     };
+    use crate::{migration_sql::AUTH_MIGRATIONS, test_db};
     use tlab::hash::{Argon2Config, Argon2PasswordHasher, PasswordHasher};
     use tlab::jwt::{EdDsaKeyFiles, JwtCodec, JwtConfig, TokenUse};
 
-    async fn database() -> Arc<AppDB> {
-        let app_db = Arc::new(
-            AppDB::new(&tlab::sqlxdb::Config {
-                url: "postgres://tlab:tlab@localhost:25432/tlab".into(),
-                max_connections: 1,
-            })
-            .await
-            .unwrap(),
-        );
-        let mut conn = app_db.conn().await.unwrap();
-        sqlx::raw_sql(include_str!("../migrations/001_create_user_account.sql"))
-            .execute(conn.context().backend())
-            .await
-            .unwrap();
-        sqlx::raw_sql(include_str!(
-            "../migrations/002_create_user_identity_and_credential.sql"
-        ))
-        .execute(conn.context().backend())
-        .await
-        .unwrap();
-        sqlx::raw_sql(include_str!("../migrations/003_create_refresh_token.sql"))
-            .execute(conn.context().backend())
-            .await
-            .unwrap();
-        sqlx::raw_sql(include_str!("../migrations/004_create_rbac.sql"))
-            .execute(conn.context().backend())
-            .await
-            .unwrap();
-        drop(conn);
-        app_db
+    async fn database() -> test_db::IsolatedDb {
+        test_db::isolated_db(&AUTH_MIGRATIONS.map(|(_, sql)| sql)).await
     }
 
     fn jwt_codec() -> Arc<JwtCodec> {
@@ -196,33 +173,11 @@ mod tests {
             .unwrap()
     }
 
-    async fn delete_user(app_db: &AppDB, user_id: i64) {
-        let mut tx = app_db.tx().await.unwrap();
-        sqlx::query(
-            "DELETE FROM tlab_user_credential \
-             WHERE user_identity_id IN (SELECT id FROM tlab_user_identity WHERE user_account_id = $1)",
-        )
-        .bind(user_id)
-        .execute(tx.context().backend())
-        .await
-        .unwrap();
-        sqlx::query("DELETE FROM tlab_user_identity WHERE user_account_id = $1")
-            .bind(user_id)
-            .execute(tx.context().backend())
-            .await
-            .unwrap();
-        sqlx::query("DELETE FROM tlab_user_account WHERE id = $1")
-            .bind(user_id)
-            .execute(tx.context().backend())
-            .await
-            .unwrap();
-        tx.commit().await.unwrap();
-    }
-
     #[tokio::test]
     #[ignore = "requires tlab-boilerplate Docker PostgreSQL service"]
     async fn logs_in_managed_user_with_correct_password() {
-        let app_db = database().await;
+        let fixture = database().await;
+        let app_db = fixture.database.clone();
         let hasher = password_hasher();
         let account = create_user(&app_db, &hasher).await;
         let mut conn = app_db.conn().await.unwrap();
@@ -248,7 +203,6 @@ mod tests {
             .await
             .unwrap();
 
-
         let access = jwt_codec.verify(&logged_in.tokens.access.token).unwrap();
         let refresh = jwt_codec.verify(&logged_in.tokens.refresh.token).unwrap();
         assert_eq!(access.sub, account.id.to_string());
@@ -272,13 +226,16 @@ mod tests {
         assert_eq!(stored.token_hash, expected_hash);
         assert_eq!(stored.expires_at.timestamp(), refresh.exp as i64);
         drop(conn);
-        delete_user(&app_db, account.id).await;
+        drop(usecase);
+        drop(app_db);
+        fixture.cleanup().await;
     }
 
     #[tokio::test]
     #[ignore = "requires tlab-boilerplate Docker PostgreSQL service"]
     async fn logout_removes_only_the_selected_session() {
-        let app_db = database().await;
+        let fixture = database().await;
+        let app_db = fixture.database.clone();
         let hasher = password_hasher();
         let account = create_user(&app_db, &hasher).await;
         let jwt_codec = jwt_codec();
@@ -344,14 +301,18 @@ mod tests {
             session_id: second_session_id,
         };
         logout.execute(&command).await.unwrap();
-        delete_user(&app_db, account.id).await;
+        drop(logout);
+        drop(login);
+        drop(app_db);
+        fixture.cleanup().await;
     }
 
     #[tokio::test]
     #[ignore = "requires tlab-boilerplate Docker PostgreSQL service"]
     async fn rejects_login_for_missing_account() {
-        let app_db = database().await;
-        let usecase = LoginManagedUserUsecase::new(app_db, password_hasher(), jwt_codec());
+        let fixture = database().await;
+        let usecase =
+            LoginManagedUserUsecase::new(fixture.database.clone(), password_hasher(), jwt_codec());
 
         let result = usecase
             .execute(&LoginManagedUserCommand {
@@ -361,12 +322,15 @@ mod tests {
             .await;
 
         assert!(matches!(result, Err(tlab::Error::InvalidCredentials)));
+        drop(usecase);
+        fixture.cleanup().await;
     }
 
     #[tokio::test]
     #[ignore = "requires tlab-boilerplate Docker PostgreSQL service"]
     async fn rejects_login_with_wrong_password() {
-        let app_db = database().await;
+        let fixture = database().await;
+        let app_db = fixture.database.clone();
         let hasher = password_hasher();
         let account = create_user(&app_db, &hasher).await;
         let usecase = LoginManagedUserUsecase::new(app_db.clone(), hasher, jwt_codec());
@@ -387,7 +351,9 @@ mod tests {
                 .is_empty()
         );
         drop(conn);
-        delete_user(&app_db, account.id).await;
+        drop(usecase);
+        drop(app_db);
+        fixture.cleanup().await;
     }
 
     #[test]

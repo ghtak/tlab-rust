@@ -326,34 +326,15 @@ pub async fn delete_user_credential(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app_container::AppDB;
-
-    async fn database() -> AppDB {
-        AppDB::new(&tlab::sqlxdb::Config {
-            url: "postgres://tlab:tlab@localhost:25432/tlab".into(),
-            max_connections: 1,
-        })
-        .await
-        .unwrap()
-    }
+    use crate::{migration_sql::AUTH_MIGRATIONS, test_db};
 
     #[tokio::test]
     #[ignore = "requires tests/docker-db-env PostgreSQL service"]
     async fn runs_user_repository_cud_with_postgres() {
-        let database = database().await;
-        let mut tx = database.tx().await.unwrap();
+        let database = test_db::connect().await;
+        let mut tx =
+            test_db::isolated_tx(&database, &[AUTH_MIGRATIONS[0].1, AUTH_MIGRATIONS[1].1]).await;
         let mut context = tx.context();
-
-        sqlx::raw_sql(include_str!("../migrations/001_create_user_account.sql"))
-            .execute(context.backend())
-            .await
-            .unwrap();
-        sqlx::raw_sql(include_str!(
-            "../migrations/002_create_user_identity_and_credential.sql"
-        ))
-        .execute(context.backend())
-        .await
-        .unwrap();
 
         let suffix = format!(
             "{}-{}",

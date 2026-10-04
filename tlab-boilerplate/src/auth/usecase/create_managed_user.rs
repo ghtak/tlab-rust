@@ -65,38 +65,14 @@ impl CreateManagedUserUsecase {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{migration_sql::AUTH_MIGRATIONS, test_db};
     use tlab::hash::{PasswordHasher, Pbkdf2Config, Pbkdf2PasswordHasher};
-
-    async fn database() -> Arc<AppDB> {
-        Arc::new(
-            AppDB::new(&tlab::sqlxdb::Config {
-                url: "postgres://tlab:tlab@localhost:25432/tlab".into(),
-                max_connections: 1,
-            })
-            .await
-            .unwrap(),
-        )
-    }
 
     #[tokio::test]
     #[ignore = "requires tlab-boilerplate Docker PostgreSQL service"]
     async fn creates_a_managed_user_with_a_verified_password() {
-        let app_db = database().await;
-        let mut connection = app_db.conn().await.unwrap();
-        let mut context = connection.context();
-
-        sqlx::raw_sql(include_str!("../migrations/001_create_user_account.sql"))
-            .execute(context.backend())
-            .await
-            .unwrap();
-        sqlx::raw_sql(include_str!(
-            "../migrations/002_create_user_identity_and_credential.sql"
-        ))
-        .execute(context.backend())
-        .await
-        .unwrap();
-        drop(context);
-        drop(connection);
+        let fixture = test_db::isolated_db(&[AUTH_MIGRATIONS[0].1, AUTH_MIGRATIONS[1].1]).await;
+        let app_db = fixture.database.clone();
 
         let password_hasher = Arc::new(Pbkdf2PasswordHasher::new(&Pbkdf2Config {
             iterations: 1_000,
@@ -137,25 +113,8 @@ mod tests {
         password_hasher.verify("password", &password_hash).unwrap();
         drop(connection);
 
-        let mut cleanup = app_db.tx().await.unwrap();
-        sqlx::query(
-            "DELETE FROM tlab_user_credential \
-             WHERE user_identity_id IN (SELECT id FROM tlab_user_identity WHERE user_account_id = $1)",
-        )
-        .bind(account.id)
-        .execute(cleanup.context().backend())
-        .await
-        .unwrap();
-        sqlx::query("DELETE FROM tlab_user_identity WHERE user_account_id = $1")
-            .bind(account.id)
-            .execute(cleanup.context().backend())
-            .await
-            .unwrap();
-        sqlx::query("DELETE FROM tlab_user_account WHERE id = $1")
-            .bind(account.id)
-            .execute(cleanup.context().backend())
-            .await
-            .unwrap();
-        cleanup.commit().await.unwrap();
+        drop(usecase);
+        drop(app_db);
+        fixture.cleanup().await;
     }
 }
