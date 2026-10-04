@@ -8,7 +8,7 @@ use crate::auth::{
     access_claims::AppClaims,
     repository::{rbac_repository, refresh_token_repository, user_repository},
 };
-use crate::{app_container::AppDB, auth::entity};
+use crate::{app_container::AppDB};
 
 //dummy login password
 const DUMMY_LOGIN_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$o90CMRSOfYxJu7s/gJVLzA$QRg9RtFOtSICuubzdE+iJbUo0ct1tJxphWFyp/OLCXo";
@@ -20,7 +20,6 @@ pub struct LoginManagedUserCommand {
 }
 
 pub struct LoginManagedUserResult {
-    pub account: entity::UserAccount,
     pub tokens: tlab::jwt::TokenPair,
 }
 
@@ -91,13 +90,14 @@ impl LoginManagedUserUsecase {
         )
         .await?;
 
-        Ok(LoginManagedUserResult { account, tokens })
+        Ok(LoginManagedUserResult { tokens })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::auth::entity;
     use crate::auth::usecase::{
         CreateManagedUserCommand, CreateManagedUserUsecase, LogoutUserCommand, LogoutUserUsecase,
     };
@@ -248,8 +248,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(logged_in.account.id, account.id);
-        assert_eq!(logged_in.account.email, account.email);
+
         let access = jwt_codec.verify(&logged_in.tokens.access.token).unwrap();
         let refresh = jwt_codec.verify(&logged_in.tokens.refresh.token).unwrap();
         assert_eq!(access.sub, account.id.to_string());
