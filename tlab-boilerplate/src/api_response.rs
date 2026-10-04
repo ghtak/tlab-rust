@@ -24,20 +24,12 @@ impl ApiResponse<()> {
         }
     }
 
-    pub fn bad_request(message: impl Into<String>) -> Self {
-        Self::error(axum::http::StatusCode::BAD_REQUEST, message)
-    }
-
     pub fn unauthorized(message: impl Into<String>) -> Self {
         Self::error(axum::http::StatusCode::UNAUTHORIZED, message)
     }
 
     pub fn forbidden(message: impl Into<String>) -> Self {
         Self::error(axum::http::StatusCode::FORBIDDEN, message)
-    }
-
-    pub fn not_found(message: impl Into<String>) -> Self {
-        Self::error(axum::http::StatusCode::NOT_FOUND, message)
     }
 
     pub fn conflict(message: impl Into<String>) -> Self {
@@ -55,6 +47,14 @@ impl ApiResponse<()> {
             error: Some(message.into()),
         }
     }
+
+    // pub fn not_found(message: impl Into<String>) -> Self {
+    //     Self::error(axum::http::StatusCode::NOT_FOUND, message)
+    // }
+
+    // pub fn bad_request(message: impl Into<String>) -> Self {
+    //     Self::error(axum::http::StatusCode::BAD_REQUEST, message)
+    // }
 }
 
 impl<T> ApiResponse<T> {
@@ -124,16 +124,6 @@ mod tests {
             ApiResponse::created(json!({ "id": "order-1" })),
             StatusCode::CREATED,
             json!({ "data": { "id": "order-1" } }),
-        )
-        .await;
-    }
-
-    #[tokio::test]
-    async fn responds_with_not_found_error() {
-        assert_response(
-            ApiResponse::not_found("Order not found"),
-            StatusCode::NOT_FOUND,
-            json!({ "error": "Order not found" }),
         )
         .await;
     }
