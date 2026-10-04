@@ -5,7 +5,7 @@ use crate::{
 
 const ADMIN_EMAIL: &str = "admin@localhost";
 
-const AUTH_MIGRATIONS: [(&str, &str); 3] = [
+const AUTH_MIGRATIONS: [(&str, &str); 4] = [
     (
         "001_create_user_account.sql",
         include_str!("auth/migrations/001_create_user_account.sql"),
@@ -17,6 +17,10 @@ const AUTH_MIGRATIONS: [(&str, &str); 3] = [
     (
         "003_create_refresh_token.sql",
         include_str!("auth/migrations/003_create_refresh_token.sql"),
+    ),
+    (
+        "004_create_rbac.sql",
+        include_str!("auth/migrations/004_create_rbac.sql"),
     ),
 ];
 
@@ -80,6 +84,17 @@ async fn create_admin_user_if_missing(
         .await?;
         tracing::info!(email = ADMIN_EMAIL, "Managed admin user created");
     }
+
+    sqlx::query(
+        "INSERT INTO tlab_user_role (user_account_id, role_id) \
+         SELECT account.id, role.id FROM tlab_user_account AS account \
+         JOIN tlab_role AS role ON role.code = 'admin' WHERE account.email = $1 \
+         ON CONFLICT DO NOTHING",
+    )
+    .bind(ADMIN_EMAIL)
+    .execute(context.backend())
+    .await
+    .map_err(tlab::sqlxdb::postgres::map_error)?;
 
     Ok(())
 }
@@ -147,9 +162,32 @@ mod tests {
         assert_eq!(account.2, ADMIN_EMAIL);
         password_hasher.verify("passwd", &account.3).unwrap();
 
+        let permissions: Vec<String> = sqlx::query_scalar(
+            "SELECT permission.code FROM tlab_user_role AS user_role \
+             JOIN tlab_role_permission AS role_permission ON role_permission.role_id = user_role.role_id \
+             JOIN tlab_permission AS permission ON permission.id = role_permission.permission_id \
+             WHERE user_role.user_account_id = $1",
+        )
+        .bind(account.0)
+        .fetch_all(tx.context().backend())
+        .await
+        .unwrap();
+        assert_eq!(permissions, ["user:create"]);
+
         create_admin_user_if_missing(&mut tx.context(), &password_hasher)
             .await
             .unwrap();
+
+        let role_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM tlab_user_role AS user_role \
+             JOIN tlab_role AS role ON role.id = user_role.role_id \
+             WHERE user_role.user_account_id = $1 AND role.code = 'admin'",
+        )
+        .bind(account.0)
+        .fetch_one(tx.context().backend())
+        .await
+        .unwrap();
+        assert_eq!(role_count, 1);
 
         tx.rollback().await.unwrap();
     }
