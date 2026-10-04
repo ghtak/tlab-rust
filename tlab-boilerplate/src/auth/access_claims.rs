@@ -77,7 +77,7 @@ mod tests {
             refresh_token_ttl_seconds: 3600,
         };
         let codec = JwtCodec::new(&config).unwrap();
-        let pair = codec.issue_pair("user-42").unwrap();
+        let pair = codec.issue_pair("user-42", None).unwrap();
 
         assert!(extract_claims(None, &codec).unwrap().is_none());
 

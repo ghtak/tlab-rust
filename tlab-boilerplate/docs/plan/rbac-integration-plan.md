@@ -19,7 +19,7 @@ struct AccessClaims {
 }
 ```
 
-- 비밀번호 확인 후 DB에서 현재 역할 ID를 조회해 **access token에만** `app: { "role_ids": [...] }`를 넣는다. refresh token에는 앱 역할 데이터를 넣지 않는다. 기존 `issue_pair(subject)` 사용처는 유지하고 앱 데이터를 받는 발급 경로를 추가한다.
+- 비밀번호 확인 후 DB에서 현재 역할 ID를 조회해 **access token에만** `app: { "role_ids": [...] }`를 넣는다. refresh token에는 앱 역할 데이터를 넣지 않는다. `issue_pair(subject, app)`으로 발급 인자를 확장하고 앱 데이터가 없는 사용처는 `None`을 전달한다.
 - `AccessClaims` 추출기는 서명·만료·발급자·대상·`TokenUse::Access`를 검증한 뒤 `app.role_ids`를 정수 배열로 파싱한다. `app`이 없는 기존 토큰은 빈 역할 ID 목록으로 처리하고, `app`은 있는데 `role_ids`가 없거나 형식이 잘못되면 401로 거부한다. 역할 ID는 신뢰할 수 있는 DB 조회 결과로만 발급한다.
 - 현재 `Option<AccessClaims>` 추출은 `/me`에 유지한다. 보호된 경로에는 Bearer 토큰을 필수로 요구하는 추출을 제공하고, 두 추출 방식은 같은 검증 함수를 사용한다. 토큰 없음·무효는 401, 유효한 토큰에 필요한 퍼미션이 없음은 403으로 구분한다.
 

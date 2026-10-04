@@ -3,7 +3,7 @@ use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use sha2::{Digest, Sha256};
 
-use crate::auth::repository::{refresh_token_repository, user_repository};
+use crate::auth::repository::{rbac_repository, refresh_token_repository, user_repository};
 use crate::{app_container::AppDB, auth::entity};
 
 //dummy login password
@@ -60,7 +60,13 @@ impl LoginManagedUserUsecase {
         )?;
 
         let account = managed_login_user.account;
-        let tokens = self.jwt_codec.issue_pair(&account.id.to_string())?;
+        let role_ids =
+            rbac_repository::find_role_ids_by_user_account_id(&mut conn.context(), account.id)
+                .await?;
+        let tokens = self.jwt_codec.issue_pair(
+            &account.id.to_string(),
+            Some(serde_json::json!({ "role_ids": role_ids })),
+        )?;
         let token_hash: [u8; 32] = Sha256::digest(tokens.refresh.token.as_bytes()).into();
         let expires_at = i64::try_from(tokens.refresh.expires_at)
             .ok()
@@ -102,6 +108,10 @@ mod tests {
         .await
         .unwrap();
         sqlx::raw_sql(include_str!("../migrations/003_create_refresh_token.sql"))
+            .execute(conn.context().backend())
+            .await
+            .unwrap();
+        sqlx::raw_sql(include_str!("../migrations/004_create_rbac.sql"))
             .execute(conn.context().backend())
             .await
             .unwrap();
@@ -201,6 +211,18 @@ mod tests {
         let app_db = database().await;
         let hasher = password_hasher();
         let account = create_user(&app_db, &hasher).await;
+        let mut conn = app_db.conn().await.unwrap();
+        let role_id: i64 = sqlx::query_scalar("SELECT id FROM tlab_role WHERE code = 'admin'")
+            .fetch_one(conn.context().backend())
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO tlab_user_role (user_account_id, role_id) VALUES ($1, $2)")
+            .bind(account.id)
+            .bind(role_id)
+            .execute(conn.context().backend())
+            .await
+            .unwrap();
+        drop(conn);
         let jwt_codec = jwt_codec();
         let usecase = LoginManagedUserUsecase::new(app_db.clone(), hasher, jwt_codec.clone());
 
@@ -218,7 +240,12 @@ mod tests {
         let refresh = jwt_codec.verify(&logged_in.tokens.refresh.token).unwrap();
         assert_eq!(access.sub, account.id.to_string());
         assert_eq!(access.token_use, TokenUse::Access);
+        assert_eq!(
+            access.app,
+            Some(serde_json::json!({ "role_ids": [role_id] }))
+        );
         assert_eq!(refresh.token_use, TokenUse::Refresh);
+        assert!(refresh.app.is_none());
 
         let mut conn = app_db.conn().await.unwrap();
         let stored =

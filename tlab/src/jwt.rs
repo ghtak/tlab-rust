@@ -7,6 +7,7 @@ use std::{
 
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::{Error, Result};
 
@@ -105,6 +106,8 @@ pub struct JwtClaims {
     pub iat: u64,
     pub exp: u64,
     pub token_use: TokenUse,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app: Option<Value>,
 }
 
 pub struct JwtCodec {
@@ -151,14 +154,14 @@ impl JwtCodec {
             access_token_ttl_seconds: config.access_token_ttl_seconds,
             refresh_token_ttl_seconds: config.refresh_token_ttl_seconds,
         };
-        let probe = codec.issue("jwt-key-check", TokenUse::Access, now()?, 60)?;
+        let probe = codec.issue("jwt-key-check", TokenUse::Access, now()?, 60, None)?;
         codec
             .verify(&probe.token)
             .map_err(|_| Error::IllegalState("JWT key pair does not match".into()))?;
         Ok(codec)
     }
 
-    pub fn issue_pair(&self, subject: &str) -> Result<TokenPair> {
+    pub fn issue_pair(&self, subject: &str, app: Option<Value>) -> Result<TokenPair> {
         if subject.is_empty() {
             return Err(Error::IllegalState("JWT subject is empty".into()));
         }
@@ -168,12 +171,14 @@ impl JwtCodec {
             TokenUse::Access,
             issued_at,
             self.access_token_ttl_seconds,
+            app,
         )?;
         let refresh = self.issue(
             subject,
             TokenUse::Refresh,
             issued_at,
             self.refresh_token_ttl_seconds,
+            None,
         )?;
         Ok(TokenPair { access, refresh })
     }
@@ -188,7 +193,14 @@ impl JwtCodec {
         Ok(claims)
     }
 
-    fn issue(&self, subject: &str, token_use: TokenUse, iat: u64, ttl: u64) -> Result<IssuedToken> {
+    fn issue(
+        &self,
+        subject: &str,
+        token_use: TokenUse,
+        iat: u64,
+        ttl: u64,
+        app: Option<Value>,
+    ) -> Result<IssuedToken> {
         let exp = iat
             .checked_add(ttl)
             .ok_or_else(|| Error::IllegalState("JWT expiration overflow".into()))?;
@@ -199,6 +211,7 @@ impl JwtCodec {
             iat,
             exp,
             token_use,
+            app,
         };
         let token =
             jsonwebtoken::encode(&Header::new(Algorithm::EdDSA), &claims, &self.encoding_key)
@@ -270,7 +283,7 @@ mod tests {
         let keys = TestKeys::new();
         let config = keys.config();
         let codec = JwtCodec::new(&config).unwrap();
-        let pair = codec.issue_pair("user-42").unwrap();
+        let pair = codec.issue_pair("user-42", None).unwrap();
 
         assert_ne!(pair.access.token, pair.refresh.token);
         assert!(
@@ -291,16 +304,29 @@ mod tests {
         let refresh = reloaded.verify(&pair.refresh.token).unwrap();
         assert_eq!(access.sub, "user-42");
         assert_eq!(access.token_use, TokenUse::Access);
+        assert!(access.app.is_none());
         assert_eq!(pair.access.expires_at, access.exp);
         assert_eq!(access.exp - access.iat, 60);
         assert_eq!(refresh.sub, "user-42");
         assert_eq!(refresh.token_use, TokenUse::Refresh);
+        assert!(refresh.app.is_none());
         assert_eq!(pair.refresh.expires_at, refresh.exp);
         assert_eq!(refresh.exp - refresh.iat, 3600);
         assert!(matches!(
             config.key_files.generate(),
             Err(Error::Conflict(_))
         ));
+    }
+
+    #[test]
+    fn includes_app_data_only_in_access_token() {
+        let keys = TestKeys::new();
+        let codec = JwtCodec::new(&keys.config()).unwrap();
+        let app = serde_json::json!({ "role_ids": [1, 2] });
+        let pair = codec.issue_pair("user-42", Some(app.clone())).unwrap();
+
+        assert_eq!(codec.verify(&pair.access.token).unwrap().app, Some(app));
+        assert!(codec.verify(&pair.refresh.token).unwrap().app.is_none());
     }
 
     #[test]
@@ -326,7 +352,7 @@ mod tests {
         let keys = TestKeys::new();
         let config = keys.config();
         let codec = JwtCodec::new(&config).unwrap();
-        let token = codec.issue_pair("user-42").unwrap().access.token;
+        let token = codec.issue_pair("user-42", None).unwrap().access.token;
 
         let mut parts = token.split('.');
         let header = parts.next().unwrap();
@@ -337,7 +363,7 @@ mod tests {
         assert!(matches!(codec.verify(&tampered), Err(Error::InvalidToken)));
 
         let expired = codec
-            .issue("user-42", TokenUse::Access, now().unwrap() - 100, 1)
+            .issue("user-42", TokenUse::Access, now().unwrap() - 100, 1, None)
             .unwrap();
         assert!(matches!(
             codec.verify(&expired.token),
