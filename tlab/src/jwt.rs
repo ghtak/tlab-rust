@@ -6,7 +6,7 @@ use std::{
 };
 
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
 use crate::{Error, Result};
@@ -106,8 +106,18 @@ pub struct JwtClaims {
     pub iat: u64,
     pub exp: u64,
     pub token_use: TokenUse,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_app"
+    )]
     pub app: Option<Value>,
+}
+
+fn deserialize_app<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<Option<Value>, D::Error> {
+    Value::deserialize(deserializer).map(Some)
 }
 
 pub struct JwtCodec {

@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use axum::{extract::State, http::header, response::IntoResponse, routing::{get, post}};
 use crate::{
     app_container::AppContainer,
     app_response::AppResponse,
@@ -9,6 +8,12 @@ use crate::{
         access_claims::AccessClaims,
         usecase::{CreateManagedUserCommand, LoginManagedUserCommand},
     },
+};
+use axum::{
+    extract::State,
+    http::header,
+    response::IntoResponse,
+    routing::{get, post},
 };
 
 pub fn router() -> axum::Router<Arc<AppContainer>> {
@@ -116,5 +121,5 @@ async fn logout(State(_container): State<Arc<AppContainer>>) -> AppResponse<()> 
 }
 
 async fn me(claims: Option<AccessClaims>) -> impl IntoResponse {
-    AppResponse::data(claims.map(|claims| claims.0))
+    AppResponse::data(claims.map(|claims| claims.jwt))
 }

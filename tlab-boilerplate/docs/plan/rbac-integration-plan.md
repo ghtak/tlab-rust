@@ -15,6 +15,10 @@
 ```rust
 struct AccessClaims {
     jwt: tlab::jwt::JwtClaims,
+    app: AppClaims,
+}
+
+struct AppClaims {
     role_ids: Vec<i64>,
 }
 ```

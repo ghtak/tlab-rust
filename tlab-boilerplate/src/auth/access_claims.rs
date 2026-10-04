@@ -1,14 +1,34 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::OptionalFromRequestParts,
+    extract::{FromRequestParts, OptionalFromRequestParts},
     http::{HeaderValue, header, request::Parts},
 };
+use serde::Deserialize;
 use tlab::jwt::{JwtClaims, JwtCodec, TokenUse};
 
 use crate::{app_container::AppContainer, app_response::AppResponse};
 
-pub struct AccessClaims(pub JwtClaims);
+pub struct AccessClaims {
+    pub jwt: JwtClaims,
+    pub app: AppClaims,
+}
+
+#[derive(Default, Deserialize)]
+pub struct AppClaims {
+    pub role_ids: Vec<i64>,
+}
+
+impl FromRequestParts<Arc<AppContainer>> for AccessClaims {
+    type Rejection = AppResponse<()>;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &Arc<AppContainer>,
+    ) -> Result<Self, Self::Rejection> {
+        extract_required_claims(parts.headers.get(header::AUTHORIZATION), &state.jwt_codec)
+    }
+}
 
 impl OptionalFromRequestParts<Arc<AppContainer>> for AccessClaims {
     type Rejection = AppResponse<()>;
@@ -19,6 +39,13 @@ impl OptionalFromRequestParts<Arc<AppContainer>> for AccessClaims {
     ) -> Result<Option<Self>, Self::Rejection> {
         extract_claims(parts.headers.get(header::AUTHORIZATION), &state.jwt_codec)
     }
+}
+
+fn extract_required_claims(
+    authorization: Option<&HeaderValue>,
+    codec: &JwtCodec,
+) -> Result<AccessClaims, AppResponse<()>> {
+    extract_claims(authorization, codec)?.ok_or_else(|| AppResponse::unauthorized("invalid token"))
 }
 
 fn extract_claims(
@@ -39,12 +66,20 @@ fn extract_claims(
         return Err(invalid_token());
     }
 
-    let claims = codec.verify(token).map_err(|_| invalid_token())?;
-    if claims.token_use != TokenUse::Access {
+    let jwt = codec.verify(token).map_err(|_| invalid_token())?;
+    if jwt.token_use != TokenUse::Access {
         return Err(invalid_token());
     }
 
-    Ok(Some(AccessClaims(claims)))
+    let app = jwt
+        .app
+        .as_ref()
+        .map(|app| serde_json::from_value::<AppClaims>(app.clone()))
+        .transpose()
+        .map_err(|_| invalid_token())?
+        .unwrap_or_default();
+
+    Ok(Some(AccessClaims { jwt, app }))
 }
 
 #[cfg(test)]
@@ -80,11 +115,38 @@ mod tests {
         let pair = codec.issue_pair("user-42", None).unwrap();
 
         assert!(extract_claims(None, &codec).unwrap().is_none());
+        assert_eq!(
+            extract_required_claims(None, &codec)
+                .err()
+                .unwrap()
+                .status_code,
+            axum::http::StatusCode::UNAUTHORIZED
+        );
 
         let access = HeaderValue::from_str(&format!("Bearer {}", pair.access.token)).unwrap();
-        let claims = extract_claims(Some(&access), &codec).unwrap().unwrap().0;
-        assert_eq!(claims.sub, "user-42");
-        assert_eq!(claims.token_use, TokenUse::Access);
+        let claims = extract_claims(Some(&access), &codec).unwrap().unwrap();
+        assert_eq!(claims.jwt.sub, "user-42");
+        assert_eq!(claims.jwt.token_use, TokenUse::Access);
+        assert!(claims.app.role_ids.is_empty());
+
+        let pair = codec
+            .issue_pair("user-42", Some(serde_json::json!({ "role_ids": [1, 2] })))
+            .unwrap();
+        let access = HeaderValue::from_str(&format!("Bearer {}", pair.access.token)).unwrap();
+        let claims = extract_required_claims(Some(&access), &codec).unwrap();
+        assert_eq!(claims.app.role_ids, vec![1, 2]);
+
+        for app in [
+            serde_json::Value::Null,
+            serde_json::json!({}),
+            serde_json::json!({ "role_ids": "1" }),
+            serde_json::json!({ "role_ids": [1, "2"] }),
+        ] {
+            let pair = codec.issue_pair("user-42", Some(app)).unwrap();
+            let access = HeaderValue::from_str(&format!("Bearer {}", pair.access.token)).unwrap();
+            let response = extract_claims(Some(&access), &codec).err().unwrap();
+            assert_eq!(response.status_code, axum::http::StatusCode::UNAUTHORIZED);
+        }
 
         for value in [
             "Basic abc".to_owned(),
