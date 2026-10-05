@@ -399,7 +399,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_invalid_signature_expiration_issuer_and_audience() {
+    fn rejects_invalid_signature_algorithm_and_expiration() {
         let keys = TestKeys::new();
         let config = keys.config();
         let codec = JwtCodec::new(&config).unwrap();
@@ -421,6 +421,26 @@ mod tests {
             Err(Error::InvalidToken)
         ));
 
+        let claims = codec.verify(&token).unwrap();
+        let wrong_algorithm = jsonwebtoken::encode(
+            &Header::new(Algorithm::HS256),
+            &claims,
+            &EncodingKey::from_secret(b"another secret"),
+        )
+        .unwrap();
+        assert!(matches!(
+            codec.verify(&wrong_algorithm),
+            Err(Error::InvalidToken)
+        ));
+    }
+
+    #[test]
+    fn rejects_other_keys_issuer_and_audience() {
+        let keys = TestKeys::new();
+        let config = keys.config();
+        let codec = JwtCodec::new(&config).unwrap();
+        let token = codec.issue_pair("user-42", None).unwrap().access.token;
+
         let other_keys = TestKeys::new();
         let other_codec = JwtCodec::new(&other_keys.config()).unwrap();
         assert!(matches!(
@@ -433,18 +453,6 @@ mod tests {
         assert!(matches!(
             JwtCodec::new(&mismatched_key_files),
             Err(Error::IllegalState(_))
-        ));
-
-        let claims = codec.verify(&token).unwrap();
-        let wrong_algorithm = jsonwebtoken::encode(
-            &Header::new(Algorithm::HS256),
-            &claims,
-            &EncodingKey::from_secret(b"another secret"),
-        )
-        .unwrap();
-        assert!(matches!(
-            codec.verify(&wrong_algorithm),
-            Err(Error::InvalidToken)
         ));
 
         let mut other_issuer = config.clone();

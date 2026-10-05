@@ -99,22 +99,13 @@ fn extract_claims(
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        fs,
-        time::{SystemTime, UNIX_EPOCH},
-    };
-
     use super::*;
     use tlab::jwt::{EdDsaKeyFiles, JwtConfig};
 
-    #[test]
-    fn extracts_only_valid_access_token() {
-        let nonce = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let directory = std::env::temp_dir().join(format!("tlab-optional-jwt-{nonce}"));
-        fs::create_dir(&directory).unwrap();
+    fn test_codec() -> JwtCodec {
+        let directory =
+            std::env::temp_dir().join(format!("tlab-optional-jwt-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&directory).unwrap();
         let config = JwtConfig {
             key_files: EdDsaKeyFiles {
                 private_key: directory.join("private.pem").to_string_lossy().into_owned(),
@@ -127,7 +118,58 @@ mod tests {
             refresh_token_ttl_seconds: 3600,
         };
         let codec = JwtCodec::new(&config).unwrap();
-        let pair = codec.issue_pair("42", None).unwrap();
+        std::fs::remove_dir_all(directory).unwrap();
+        codec
+    }
+
+    #[test]
+    fn extracts_access_claims() {
+        let codec = test_codec();
+        let app = serde_json::json!({
+            "role_ids": [1, 2],
+            "session_id": "550e8400-e29b-41d4-a716-446655440000"
+        });
+        let pair = codec.issue_pair("42", Some(app)).unwrap();
+        let access = HeaderValue::from_str(&format!("Bearer {}", pair.access.token)).unwrap();
+        let claims = extract_required_claims(Some(&access), &codec).unwrap();
+        assert_eq!(claims.user_account_id().unwrap(), 42);
+        assert_eq!(claims.jwt.token_use, TokenUse::Access);
+        assert_eq!(claims.app.role_ids, vec![1, 2]);
+        assert_eq!(
+            claims.app.session_id.to_string(),
+            "550e8400-e29b-41d4-a716-446655440000"
+        );
+    }
+
+    #[test]
+    fn rejects_non_numeric_subject() {
+        let codec = test_codec();
+        let app = serde_json::json!({
+            "role_ids": [1],
+            "session_id": "550e8400-e29b-41d4-a716-446655440000"
+        });
+        let invalid_subject = codec.issue_pair("user-42", Some(app)).unwrap();
+        let access =
+            HeaderValue::from_str(&format!("Bearer {}", invalid_subject.access.token)).unwrap();
+        let claims = extract_claims(Some(&access), &codec).unwrap().unwrap();
+        assert_eq!(
+            claims.user_account_id().err().unwrap().status_code,
+            axum::http::StatusCode::UNAUTHORIZED
+        );
+    }
+
+    #[test]
+    fn rejects_missing_or_invalid_authorization() {
+        let codec = test_codec();
+        let pair = codec
+            .issue_pair(
+                "42",
+                Some(serde_json::json!({
+                    "role_ids": [1],
+                    "session_id": "550e8400-e29b-41d4-a716-446655440000"
+                })),
+            )
+            .unwrap();
 
         assert!(extract_claims(None, &codec).unwrap().is_none());
         assert_eq!(
@@ -138,7 +180,25 @@ mod tests {
             axum::http::StatusCode::UNAUTHORIZED
         );
 
-        let access = HeaderValue::from_str(&format!("Bearer {}", pair.access.token)).unwrap();
+        for value in [
+            "Basic abc".to_owned(),
+            "Bearer ".to_owned(),
+            "Bearer invalid".to_owned(),
+            format!("Bearer {}", pair.refresh.token),
+        ] {
+            let header = HeaderValue::from_str(&value).unwrap();
+            let response = extract_claims(Some(&header), &codec).err().unwrap();
+            assert_eq!(response.status_code, axum::http::StatusCode::UNAUTHORIZED);
+            assert_eq!(response.error.as_deref(), Some("invalid token"));
+        }
+    }
+
+    #[test]
+    fn rejects_invalid_app_claims() {
+        let codec = test_codec();
+        let missing_app = codec.issue_pair("42", None).unwrap();
+        let access =
+            HeaderValue::from_str(&format!("Bearer {}", missing_app.access.token)).unwrap();
         assert_eq!(
             extract_claims(Some(&access), &codec)
                 .err()
@@ -146,32 +206,6 @@ mod tests {
                 .status_code,
             axum::http::StatusCode::UNAUTHORIZED
         );
-
-        let app = serde_json::json!({
-            "role_ids": [1, 2],
-            "session_id": "550e8400-e29b-41d4-a716-446655440000"
-        });
-        let pair = codec.issue_pair("42", Some(app.clone())).unwrap();
-        let access = HeaderValue::from_str(&format!("Bearer {}", pair.access.token)).unwrap();
-        let claims = extract_required_claims(Some(&access), &codec).unwrap();
-        assert_eq!(claims.jwt.sub, "42");
-        assert_eq!(claims.user_account_id().unwrap(), 42);
-        assert_eq!(claims.jwt.token_use, TokenUse::Access);
-        assert_eq!(claims.app.role_ids, vec![1, 2]);
-        assert_eq!(
-            claims.app.session_id,
-            uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap()
-        );
-
-        let invalid_subject = codec.issue_pair("user-42", Some(app)).unwrap();
-        let access =
-            HeaderValue::from_str(&format!("Bearer {}", invalid_subject.access.token)).unwrap();
-        let claims = extract_claims(Some(&access), &codec).unwrap().unwrap();
-        assert_eq!(
-            claims.user_account_id().err().unwrap().status_code,
-            axum::http::StatusCode::UNAUTHORIZED
-        );
-
         for app in [
             serde_json::Value::Null,
             serde_json::json!({}),
@@ -185,19 +219,5 @@ mod tests {
             let response = extract_claims(Some(&access), &codec).err().unwrap();
             assert_eq!(response.status_code, axum::http::StatusCode::UNAUTHORIZED);
         }
-
-        for value in [
-            "Basic abc".to_owned(),
-            "Bearer ".to_owned(),
-            "Bearer invalid".to_owned(),
-            format!("Bearer {}", pair.refresh.token),
-        ] {
-            let header = HeaderValue::from_str(&value).unwrap();
-            let response = extract_claims(Some(&header), &codec).err().unwrap();
-            assert_eq!(response.status_code, axum::http::StatusCode::UNAUTHORIZED);
-            assert_eq!(response.error.as_deref(), Some("invalid token"));
-        }
-
-        fs::remove_dir_all(directory).unwrap();
     }
 }

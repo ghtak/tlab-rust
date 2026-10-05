@@ -252,34 +252,19 @@ mod tests {
         let account = create_user(&app_db, &hasher).await;
         let jwt_codec = jwt_codec();
         let login = LoginManagedUserUsecase::new(app_db.clone(), hasher, jwt_codec.clone());
-        let first = login
-            .execute(&LoginManagedUserCommand {
-                email: account.email.clone(),
-                password: "correct password".into(),
-            })
-            .await
-            .unwrap();
-        let second = login
-            .execute(&LoginManagedUserCommand {
-                email: account.email.clone(),
-                password: "correct password".into(),
-            })
-            .await
-            .unwrap();
+        let command = LoginManagedUserCommand {
+            email: account.email.clone(),
+            password: "correct password".into(),
+        };
+        let first = login.execute(&command).await.unwrap();
+        let second = login.execute(&command).await.unwrap();
         assert_ne!(first.tokens.refresh.token, second.tokens.refresh.token);
-        let first_app = jwt_codec
-            .verify(&first.tokens.access.token)
-            .unwrap()
-            .app
-            .unwrap();
-        let second_app = jwt_codec
-            .verify(&second.tokens.access.token)
-            .unwrap()
-            .app
-            .unwrap();
-        let first_session_id = Uuid::parse_str(first_app["session_id"].as_str().unwrap()).unwrap();
-        let second_session_id =
-            Uuid::parse_str(second_app["session_id"].as_str().unwrap()).unwrap();
+        let session_id = |token: &str| {
+            let app = jwt_codec.verify(token).unwrap().app.unwrap();
+            serde_json::from_value::<AppClaims>(app).unwrap().session_id
+        };
+        let first_session_id = session_id(&first.tokens.access.token);
+        let second_session_id = session_id(&second.tokens.access.token);
         assert_ne!(first_session_id, second_session_id);
 
         let mut conn = app_db.conn().await.unwrap();
