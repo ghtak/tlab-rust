@@ -4,6 +4,8 @@ mod app_container;
 mod auth;
 mod migration;
 #[cfg(test)]
+mod test_app;
+#[cfg(test)]
 mod test_db;
 use std::sync::Arc;
 

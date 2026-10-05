@@ -5,3 +5,4 @@ pub mod repository;
 pub mod route;
 pub mod service;
 pub mod usecase;
+pub mod cookie;

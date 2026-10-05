@@ -24,5 +24,8 @@ sqlx = { version = "0.9.0", features = [
     "runtime-tokio",
     "uuid",
 ] }
+axum-extra = { version = "0.12.6", features = ["cookie"] }
+time = "0.3.55"
 
 [dev-dependencies]
+tower = { version = "0.5", features = ["util"] }

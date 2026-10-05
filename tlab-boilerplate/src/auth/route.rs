@@ -18,6 +18,8 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
+use axum_extra::extract::{CookieJar, cookie::Cookie};
+use time::Duration;
 
 pub fn router() -> axum::Router<Arc<AppContainer>> {
     axum::Router::new()
@@ -93,8 +95,10 @@ struct LoginManagedUserResponse {
     expires_in: u64,
 }
 
+
 async fn login(
     State(container): State<Arc<AppContainer>>,
+    jar: CookieJar,
     axum::Json(request): axum::Json<LoginManagedUserRequest>,
 ) -> Result<impl IntoResponse, ApiResponse<()>> {
     let command = LoginManagedUserCommand {
@@ -119,6 +123,12 @@ async fn login(
         })?;
 
     Ok((
+        auth::cookie::add_auth_cookies(
+            jar,
+            &result.tokens.access.token,
+            &result.tokens.refresh.token,
+            &container,
+        ),
         [(header::CACHE_CONTROL, "no-store")],
         ApiResponse::data(LoginManagedUserResponse {
             access_token: result.tokens.access.token,
@@ -129,7 +139,11 @@ async fn login(
     ))
 }
 
-async fn logout(State(container): State<Arc<AppContainer>>, claims: AccessClaims) -> ApiResult<()> {
+async fn logout(
+    State(container): State<Arc<AppContainer>>,
+    claims: AccessClaims,
+    jar: CookieJar,
+) -> Result<impl IntoResponse, ApiResponse<()>> {
     let command = LogoutUserCommand {
         user_account_id: claims.user_account_id()?,
         session_id: claims.app.session_id,
@@ -142,7 +156,7 @@ async fn logout(State(container): State<Arc<AppContainer>>, claims: AccessClaims
             ApiResponse::internal_error("failed to log out")
         })?;
 
-    Ok(ApiResponse::ok())
+    Ok((auth::cookie::clear_auth_cookies(jar), ApiResponse::ok()))
 }
 
 async fn me(
@@ -151,4 +165,99 @@ async fn me(
 ) -> ApiResult<tlab::jwt::JwtClaims> {
     permission::require(&container, &claims, permission::USER_MANAGE).await?;
     Ok(ApiResponse::data(claims.jwt))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_app;
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use axum_extra::extract::cookie::SameSite;
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn login_sets_and_logout_clears_auth_cookies() {
+        let (app, container) = test_app::setup().await;
+
+        let login = app
+            .clone()
+            .oneshot(
+                Request::post("/api/v1/auth/login")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        serde_json::json!({
+                            "email": "admin@localhost",
+                            "password": "passwd",
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(login.status(), StatusCode::OK);
+        let login_cookies: Vec<_> = login
+            .headers()
+            .get_all(header::SET_COOKIE)
+            .iter()
+            .map(|value| Cookie::parse(value.to_str().unwrap().to_owned()).unwrap())
+            .collect();
+        assert_eq!(login_cookies.len(), 2);
+        for (name, ttl) in [
+            (
+                "access_token",
+                container.config.jwt.access_token_ttl_seconds,
+            ),
+            (
+                "refresh_token",
+                container.config.jwt.refresh_token_ttl_seconds,
+            ),
+        ] {
+            let cookie = login_cookies
+                .iter()
+                .find(|cookie| cookie.name() == name)
+                .unwrap();
+            assert!(!cookie.value().is_empty());
+            assert_eq!(cookie.path(), Some("/"));
+            assert_eq!(cookie.max_age(), Some(Duration::seconds(ttl as i64)));
+            assert_eq!(cookie.http_only(), Some(true));
+            assert_eq!(cookie.secure(), Some(true));
+            assert_eq!(cookie.same_site(), Some(SameSite::Lax));
+        }
+
+        let access_token = login_cookies
+            .iter()
+            .find(|cookie| cookie.name() == "access_token")
+            .unwrap()
+            .value();
+        let logout = app
+            .oneshot(
+                Request::post("/api/v1/auth/logout")
+                    .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(logout.status(), StatusCode::OK);
+        let logout_cookies: Vec<_> = logout
+            .headers()
+            .get_all(header::SET_COOKIE)
+            .iter()
+            .map(|value| Cookie::parse(value.to_str().unwrap().to_owned()).unwrap())
+            .collect();
+        assert_eq!(logout_cookies.len(), 2);
+        for name in ["access_token", "refresh_token"] {
+            let cookie = logout_cookies
+                .iter()
+                .find(|cookie| cookie.name() == name)
+                .unwrap();
+            assert_eq!(cookie.value(), "");
+            assert_eq!(cookie.path(), Some("/"));
+            assert_eq!(cookie.max_age(), Some(Duration::ZERO));
+        }
+    }
 }
