@@ -51,7 +51,11 @@ async fn main() -> tlab::Result<()> {
 
     let container = Arc::new(AppContainer::new(config).await?);
 
-    let app = axum::Router::new().merge(auth::route::router());
+    let app = axum::Router::new().merge(auth::route::router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            container.clone(),
+            auth::cookie::refresh_auth_cookies
+        ));
 
     let app = if let Some(static_files) = container.config.http.static_files.as_ref() {
         if let Err(e) = static_files.validate() {

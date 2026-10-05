@@ -8,7 +8,8 @@ use crate::{
         access_claims::AccessClaims,
         permission,
         usecase::{
-            CreateManagedUserCommand, LoginManagedUserCommand, LogoutUserCommand, LogoutUserUsecase,
+            CreateManagedUserCommand, LoginManagedUserCommand, LogoutUserCommand,
+            LogoutUserUsecase, RefreshTokenCommand, RefreshTokenUsecase,
         },
     },
 };
@@ -18,13 +19,13 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
-use axum_extra::extract::{CookieJar, cookie::Cookie};
-use time::Duration;
+use axum_extra::extract::CookieJar;
 
 pub fn router() -> axum::Router<Arc<AppContainer>> {
     axum::Router::new()
         .route("/api/v1/auth/user", post(create_managed_user))
         .route("/api/v1/auth/login", post(login))
+        .route("/api/v1/auth/refresh", post(refresh_token))
         .route("/api/v1/auth/logout", post(logout))
         .route("/api/v1/auth/me", get(me))
 }
@@ -87,14 +88,18 @@ struct LoginManagedUserRequest {
     password: String,
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+struct RefreshTokenRequest {
+    refresh_token: String,
+}
+
 #[derive(serde::Serialize)]
-struct LoginManagedUserResponse {
+struct TokenResponse {
     access_token: String,
     refresh_token: String,
     token_type: &'static str,
     expires_in: u64,
 }
-
 
 async fn login(
     State(container): State<Arc<AppContainer>>,
@@ -130,9 +135,37 @@ async fn login(
             &container,
         ),
         [(header::CACHE_CONTROL, "no-store")],
-        ApiResponse::data(LoginManagedUserResponse {
+        ApiResponse::data(TokenResponse {
             access_token: result.tokens.access.token,
             refresh_token: result.tokens.refresh.token,
+            token_type: "Bearer",
+            expires_in: container.config.jwt.access_token_ttl_seconds,
+        }),
+    ))
+}
+
+async fn refresh_token(
+    State(container): State<Arc<AppContainer>>,
+    axum::Json(request): axum::Json<RefreshTokenRequest>,
+) -> Result<impl IntoResponse, ApiResponse<()>> {
+    let tokens = RefreshTokenUsecase::new(container.database.clone(), container.jwt_codec.clone())
+        .execute(&RefreshTokenCommand {
+            refresh_token: request.refresh_token,
+        })
+        .await
+        .map_err(|error| match error {
+            tlab::Error::InvalidToken => ApiResponse::unauthorized("invalid token"),
+            error => {
+                tracing::error!(?error, "Failed to refresh token");
+                ApiResponse::internal_error("failed to refresh token")
+            }
+        })?;
+
+    Ok((
+        [(header::CACHE_CONTROL, "no-store")],
+        ApiResponse::data(TokenResponse {
+            access_token: tokens.access.token,
+            refresh_token: tokens.refresh.token,
             token_type: "Bearer",
             expires_in: container.config.jwt.access_token_ttl_seconds,
         }),
@@ -172,10 +205,12 @@ mod tests {
     use super::*;
     use crate::test_app;
     use axum::{
-        body::Body,
+        body::{Body, to_bytes},
         http::{Request, StatusCode},
     };
-    use axum_extra::extract::cookie::SameSite;
+    use axum_extra::extract::cookie::{Cookie, SameSite};
+    use time::Duration;
+    use tlab::jwt::TokenUse;
     use tower::ServiceExt;
 
     #[tokio::test]
@@ -259,5 +294,72 @@ mod tests {
             assert_eq!(cookie.path(), Some("/"));
             assert_eq!(cookie.max_age(), Some(Duration::ZERO));
         }
+    }
+
+    #[tokio::test]
+    async fn refresh_rotates_api_token_and_rejects_reuse() {
+        let (app, container) = test_app::setup().await;
+        let login = app
+            .clone()
+            .oneshot(
+                Request::post("/api/v1/auth/login")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        serde_json::json!({
+                            "email": "admin@localhost",
+                            "password": "passwd",
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(login.status(), StatusCode::OK);
+        let login_body: serde_json::Value =
+            serde_json::from_slice(&to_bytes(login.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        let old_refresh = login_body["data"]["refresh_token"].as_str().unwrap();
+
+        let refresh_request = |token: &str| {
+            Request::post("/api/v1/auth/refresh")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    serde_json::json!({ "refresh_token": token }).to_string(),
+                ))
+                .unwrap()
+        };
+        let refreshed = app
+            .clone()
+            .oneshot(refresh_request(&old_refresh))
+            .await
+            .unwrap();
+        assert_eq!(refreshed.status(), StatusCode::OK);
+        assert_eq!(refreshed.headers()[header::CACHE_CONTROL], "no-store");
+        assert!(refreshed.headers().get(header::SET_COOKIE).is_none());
+        let body: serde_json::Value =
+            serde_json::from_slice(&to_bytes(refreshed.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        let new_refresh = body["data"]["refresh_token"].as_str().unwrap();
+        let new_access = body["data"]["access_token"].as_str().unwrap();
+        assert_ne!(new_refresh, old_refresh);
+        assert_eq!(body["data"]["token_type"], "Bearer");
+        assert_eq!(
+            body["data"]["expires_in"],
+            container.config.jwt.access_token_ttl_seconds
+        );
+        assert_eq!(
+            container.jwt_codec.verify(new_access).unwrap().token_use,
+            TokenUse::Access
+        );
+
+        let reused = app
+            .clone()
+            .oneshot(refresh_request(&old_refresh))
+            .await
+            .unwrap();
+        assert_eq!(reused.status(), StatusCode::UNAUTHORIZED);
+        let next = app.oneshot(refresh_request(new_refresh)).await.unwrap();
+        assert_eq!(next.status(), StatusCode::OK);
     }
 }

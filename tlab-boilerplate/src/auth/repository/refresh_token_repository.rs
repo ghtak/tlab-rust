@@ -27,6 +27,35 @@ pub async fn save(
     Ok(())
 }
 
+pub async fn rotate(
+    context: &mut AppDBCtx<'_>,
+    session_id: Uuid,
+    user_account_id: i64,
+    old_token_hash: &[u8; 32],
+    new_token_hash: &[u8; 32],
+    expires_at: DateTime<Utc>,
+) -> tlab::Result<bool> {
+    let result = sqlx::query(
+        r#"UPDATE tlab_refresh_token
+           SET token_hash = $4, expires_at = $5
+           WHERE session_id = $1 AND user_account_id = $2 AND token_hash = $3
+             AND expires_at > CURRENT_TIMESTAMP
+             AND EXISTS (
+                 SELECT 1 FROM tlab_user_account
+                 WHERE id = $2 AND status = 'active'
+             )"#,
+    )
+    .bind(session_id)
+    .bind(user_account_id)
+    .bind(old_token_hash.as_slice())
+    .bind(new_token_hash.as_slice())
+    .bind(expires_at)
+    .execute(context.backend())
+    .await
+    .map_err(sqlxdb::postgres::map_error)?;
+    Ok(result.rows_affected() == 1)
+}
+
 pub async fn find_all_by_user_account_id(
     context: &mut AppDBCtx<'_>,
     user_account_id: i64,

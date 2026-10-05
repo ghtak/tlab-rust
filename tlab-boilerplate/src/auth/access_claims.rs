@@ -9,12 +9,23 @@ use tlab::jwt::{JwtClaims, JwtCodec, TokenUse};
 
 use crate::{api_response::ApiResponse, app_container::AppContainer};
 
+#[derive(Clone)]
 pub struct AccessClaims {
     pub jwt: JwtClaims,
     pub app: AppClaims,
 }
 
 impl AccessClaims {
+    pub(crate) fn from_jwt(jwt: JwtClaims) -> Result<Self, ApiResponse<()>> {
+        let invalid_token = || ApiResponse::unauthorized("invalid token");
+        if jwt.token_use != TokenUse::Access {
+            return Err(invalid_token());
+        }
+        let app = jwt.app.as_ref().ok_or_else(invalid_token)?;
+        let app = serde_json::from_value::<AppClaims>(app.clone()).map_err(|_| invalid_token())?;
+        Ok(Self { jwt, app })
+    }
+
     pub fn user_account_id(&self) -> Result<i64, ApiResponse<()>> {
         self.jwt
             .sub
@@ -23,7 +34,7 @@ impl AccessClaims {
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct AppClaims {
     pub role_ids: Vec<i64>,
     pub session_id: uuid::Uuid,
@@ -36,6 +47,9 @@ impl FromRequestParts<Arc<AppContainer>> for AccessClaims {
         parts: &mut Parts,
         state: &Arc<AppContainer>,
     ) -> Result<Self, Self::Rejection> {
+        if let Some(claims) = parts.extensions.get::<AccessClaims>() {
+            return Ok(claims.clone());
+        }
         extract_required_claims(parts.headers.get(header::AUTHORIZATION), &state.jwt_codec)
     }
 }
@@ -47,6 +61,9 @@ impl OptionalFromRequestParts<Arc<AppContainer>> for AccessClaims {
         parts: &mut Parts,
         state: &Arc<AppContainer>,
     ) -> Result<Option<Self>, Self::Rejection> {
+        if let Some(claims) = parts.extensions.get::<AccessClaims>() {
+            return Ok(Some(claims.clone()));
+        }
         extract_claims(parts.headers.get(header::AUTHORIZATION), &state.jwt_codec)
     }
 }
@@ -77,14 +94,7 @@ fn extract_claims(
     }
 
     let jwt = codec.verify(token).map_err(|_| invalid_token())?;
-    if jwt.token_use != TokenUse::Access {
-        return Err(invalid_token());
-    }
-
-    let app = jwt.app.as_ref().ok_or_else(invalid_token)?;
-    let app = serde_json::from_value::<AppClaims>(app.clone()).map_err(|_| invalid_token())?;
-
-    Ok(Some(AccessClaims { jwt, app }))
+    AccessClaims::from_jwt(jwt).map(Some)
 }
 
 #[cfg(test)]

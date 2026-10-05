@@ -101,6 +101,8 @@ pub enum TokenUse {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JwtClaims {
     pub sub: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jti: Option<String>,
     pub iss: String,
     pub aud: String,
     pub iat: u64,
@@ -197,7 +199,11 @@ impl JwtCodec {
         let claims = jsonwebtoken::decode::<JwtClaims>(token, &self.decoding_key, &self.validation)
             .map_err(|_| Error::InvalidToken)?
             .claims;
-        if claims.sub.is_empty() || claims.exp <= claims.iat || claims.iat > now()? {
+        if claims.sub.is_empty()
+            || claims.jti.as_deref() == Some("")
+            || claims.exp <= claims.iat
+            || claims.iat > now()?
+        {
             return Err(Error::InvalidToken);
         }
         Ok(claims)
@@ -216,6 +222,7 @@ impl JwtCodec {
             .ok_or_else(|| Error::IllegalState("JWT expiration overflow".into()))?;
         let claims = JwtClaims {
             sub: subject.to_owned(),
+            jti: Some(uuid::Uuid::new_v4().to_string()),
             iss: self.issuer.clone(),
             aud: self.audience.clone(),
             iat,
@@ -340,6 +347,24 @@ mod tests {
             Some(app.clone())
         );
         assert_eq!(codec.verify(&pair.refresh.token).unwrap().app, Some(app));
+
+        let next = codec.issue_pair("user-42", None).unwrap();
+        assert_ne!(pair.refresh.token, next.refresh.token);
+        assert!(codec.verify(&pair.refresh.token).unwrap().jti.is_some());
+        assert_ne!(
+            codec.verify(&pair.refresh.token).unwrap().jti,
+            codec.verify(&next.refresh.token).unwrap().jti
+        );
+
+        let mut old_claims = codec.verify(&pair.refresh.token).unwrap();
+        old_claims.jti = None;
+        let old_token = jsonwebtoken::encode(
+            &Header::new(Algorithm::EdDSA),
+            &old_claims,
+            &codec.encoding_key,
+        )
+        .unwrap();
+        assert_eq!(codec.verify(&old_token).unwrap().jti, None);
     }
 
     #[test]
