@@ -1,14 +1,17 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, redirect } from '@tanstack/react-router'
+import { AccountPage } from '../features/auth/pages/AccountPage'
+import { currentUserQuery } from '../features/auth/services/queries'
 
-export const Route = createFileRoute('/')({ component: Home })
+export const Route = createFileRoute('/')({
+  beforeLoad: async ({ context }) => {
+    const user = await context.queryClient.query(currentUserQuery)
+    if (!user) throw redirect({ to: '/login' })
+    return { user }
+  },
+  component: Home,
+})
 
 function Home() {
-  return (
-    <div className="p-8">
-      <h1 className="text-4xl font-bold">Welcome to TanStack Start</h1>
-      <p className="mt-4 text-lg">
-        Edit <code>src/routes/index.tsx</code> to get started.
-      </p>
-    </div>
-  )
+  const { user } = Route.useRouteContext()
+  return <AccountPage user={user} />
 }

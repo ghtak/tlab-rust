@@ -7,6 +7,7 @@ use crate::{
         self,
         access_claims::AccessClaims,
         permission,
+        repository::user_repository,
         usecase::{
             CreateManagedUserCommand, LoginManagedUserCommand, LogoutUserCommand,
             LogoutUserUsecase, RefreshTokenCommand, RefreshTokenUsecase,
@@ -192,12 +193,38 @@ async fn logout(
     Ok((auth::cookie::clear_auth_cookies(jar), ApiResponse::ok()))
 }
 
+#[derive(serde::Serialize)]
+struct MeResponse {
+    id: i64,
+    name: String,
+    email: String,
+    status: String,
+}
+
 async fn me(
     State(container): State<Arc<AppContainer>>,
     claims: AccessClaims,
-) -> ApiResult<tlab::jwt::JwtClaims> {
-    permission::require(&container, &claims, permission::USER_MANAGE).await?;
-    Ok(ApiResponse::data(claims.jwt))
+) -> Result<impl IntoResponse, ApiResponse<()>> {
+    let mut conn = container.database.conn().await.map_err(|error| {
+        tracing::error!(?error, "Failed to connect to database");
+        ApiResponse::internal_error("failed to load user")
+    })?;
+    let user = user_repository::find_user_account(&mut conn.context(), claims.user_account_id()?)
+        .await
+        .map_err(|error| {
+            tracing::error!(?error, "Failed to load user");
+            ApiResponse::internal_error("failed to load user")
+        })?
+        .ok_or_else(|| ApiResponse::unauthorized("invalid token"))?;
+    Ok((
+        [(header::CACHE_CONTROL, "no-store")],
+        ApiResponse::data(MeResponse {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            status: user.status.as_str().to_owned(),
+        }),
+    ))
 }
 
 #[cfg(test)]
@@ -296,6 +323,52 @@ mod tests {
             assert_eq!(cookie.secure(), Some(true));
             assert_eq!(cookie.same_site(), Some(SameSite::Lax));
         }
+    }
+
+    #[tokio::test]
+    async fn me_returns_user_without_management_permission() {
+        let (app, container) = test_app::setup().await;
+        let mut conn = container.database.conn().await.unwrap();
+        let email = crate::test_db::unique_email("me");
+        let user = user_repository::create_user_account(
+            &mut conn.context(),
+            "Regular User",
+            &email,
+            crate::auth::entity::UserStatus::Active,
+        )
+        .await
+        .unwrap();
+        drop(conn);
+        let token = container
+            .jwt_codec
+            .issue_pair(
+                &user.id.to_string(),
+                Some(serde_json::json!({
+                    "role_ids": [],
+                    "session_id": uuid::Uuid::new_v4(),
+                })),
+            )
+            .unwrap();
+
+        let response = app
+            .oneshot(
+                Request::get("/api/v1/auth/me")
+                    .header(
+                        header::AUTHORIZATION,
+                        format!("Bearer {}", token.access.token),
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response_json(response).await;
+        assert_eq!(body["data"]["id"], user.id);
+        assert_eq!(body["data"]["name"], "Regular User");
+        assert_eq!(body["data"]["email"], email);
+        assert_eq!(body["data"]["status"], "active");
     }
 
     #[tokio::test]

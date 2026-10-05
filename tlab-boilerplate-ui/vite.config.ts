@@ -8,6 +8,15 @@ import tailwindcss from '@tailwindcss/vite'
 
 const config = defineConfig({
   resolve: { tsconfigPaths: true },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'https://localhost:13000',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
+  },
   plugins: [
     devtools(),
     tailwindcss(),

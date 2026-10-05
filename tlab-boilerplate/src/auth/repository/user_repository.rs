@@ -202,6 +202,22 @@ pub async fn delete_user_account(
     Ok(())
 }
 
+pub async fn find_user_account(
+    context: &mut AppDBCtx<'_>,
+    user_account_id: i64,
+) -> tlab::Result<Option<entity::UserAccount>> {
+    let row = sqlx::query_as::<_, UserAccountRow>(
+        r#"SELECT id, name, email, status, created_at, updated_at, create_by, update_by
+           FROM tlab_user_account WHERE id = $1"#,
+    )
+    .bind(user_account_id)
+    .fetch_optional(context.backend())
+    .await
+    .map_err(sqlxdb::postgres::map_error)?;
+
+    row.map(UserAccountRow::into_entity).transpose()
+}
+
 pub async fn find_managed_login_user(
     context: &mut AppDBCtx<'_>,
     email: &str,
