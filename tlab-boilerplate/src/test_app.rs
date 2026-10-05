@@ -20,6 +20,11 @@ pub async fn setup() -> (Router, Arc<AppContainer>) {
         .await
         .unwrap();
 
-    let app = auth::route::router().with_state(container.clone());
+    let app = auth::route::router()
+        .route_layer(axum::middleware::from_fn_with_state(
+            container.clone(),
+            auth::cookie::refresh_auth_cookies,
+        ))
+        .with_state(container.clone());
     (app, container)
 }

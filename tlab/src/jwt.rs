@@ -195,6 +195,19 @@ impl JwtCodec {
         Ok(TokenPair { access, refresh })
     }
 
+    pub fn issue_access(&self, subject: &str, app: Option<Value>) -> Result<IssuedToken> {
+        if subject.is_empty() {
+            return Err(Error::IllegalState("JWT subject is empty".into()));
+        }
+        self.issue(
+            subject,
+            TokenUse::Access,
+            now()?,
+            self.access_token_ttl_seconds,
+            app,
+        )
+    }
+
     pub fn verify(&self, token: &str) -> Result<JwtClaims> {
         let claims = jsonwebtoken::decode::<JwtClaims>(token, &self.decoding_key, &self.validation)
             .map_err(|_| Error::InvalidToken)?

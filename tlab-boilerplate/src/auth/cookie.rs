@@ -39,13 +39,15 @@ pub fn add_auth_cookies(
         container.config.jwt.refresh_token_ttl_seconds,
     );
 
-    let access = build_cookie(
+    add_access_cookie(jar.add(refresh), access_token, container)
+}
+
+fn add_access_cookie(jar: CookieJar, access_token: &str, container: &AppContainer) -> CookieJar {
+    jar.add(build_cookie(
         "access_token",
         access_token,
         container.config.jwt.access_token_ttl_seconds,
-    );
-
-    jar.add(access).add(refresh)
+    ))
 }
 
 pub fn clear_auth_cookies(jar: CookieJar) -> CookieJar {
@@ -59,9 +61,10 @@ pub async fn refresh_auth_cookies(
     mut req: axum::http::Request<axum::body::Body>,
     next: axum::middleware::Next,
 ) -> Response {
+    let is_logout = req.uri().path() == "/api/v1/auth/logout";
     if matches!(
         req.uri().path(),
-        "/api/v1/auth/login" | "/api/v1/auth/logout" | "/api/v1/auth/refresh"
+        "/api/v1/auth/login" | "/api/v1/auth/refresh"
     ) {
         return next.run(req).await;
     }
@@ -82,13 +85,13 @@ pub async fn refresh_auth_cookies(
     let Some(refresh_token) = jar.get("refresh_token") else {
         return next.run(req).await;
     };
-    let tokens = RefreshTokenUsecase::new(container.database.clone(), container.jwt_codec.clone())
-        .execute(&RefreshTokenCommand {
+    let access = RefreshTokenUsecase::new(container.database.clone(), container.jwt_codec.clone())
+        .execute_access(&RefreshTokenCommand {
             refresh_token: refresh_token.value().to_owned(),
         })
         .await;
-    let tokens = match tokens {
-        Ok(tokens) => tokens,
+    let access = match access {
+        Ok(access) => access,
         Err(tlab::Error::InvalidToken) => return next.run(req).await,
         Err(error) => {
             tracing::error!(?error, "Failed to refresh auth cookies");
@@ -98,7 +101,7 @@ pub async fn refresh_auth_cookies(
 
     let claims = container
         .jwt_codec
-        .verify(&tokens.access.token)
+        .verify(&access.token)
         .ok()
         .and_then(|jwt| AccessClaims::from_jwt(jwt).ok());
     let Some(claims) = claims else {
@@ -106,19 +109,17 @@ pub async fn refresh_auth_cookies(
         return ApiResponse::internal_error("failed to refresh auth cookies").into_response();
     };
     req.extensions_mut().insert(claims);
-    // 갱신된 쿠키는 내부 요청에 전달하지 않는다. 이번 요청의 인증은 AccessClaims로 처리하고,
-    // 새 쿠키는 응답의 Set-Cookie로 전달한다.
+    // 갱신된 access 쿠키는 내부 요청에 전달하지 않는다. 이번 요청의 인증은 AccessClaims로 처리한다.
     let response = next.run(req).await;
-    (
-        add_auth_cookies(
-            CookieJar::new(),
-            &tokens.access.token,
-            &tokens.refresh.token,
-            &container,
-        ),
-        response,
-    )
-        .into_response()
+    if is_logout {
+        response
+    } else {
+        (
+            add_access_cookie(CookieJar::new(), &access.token, &container),
+            response,
+        )
+            .into_response()
+    }
 }
 
 #[cfg(test)]
@@ -170,7 +171,10 @@ mod tests {
                 }),
             )
             .route("/api/v1/auth/login", get(|| async { StatusCode::OK }))
-            .route("/api/v1/auth/logout", get(|| async { StatusCode::OK }))
+            .route(
+                "/api/v1/auth/logout",
+                get(|_claims: AccessClaims| async { StatusCode::OK }),
+            )
             .route("/api/v1/auth/refresh", get(|| async { StatusCode::OK }))
             .route_layer(middleware::from_fn_with_state(
                 container.clone(),
@@ -194,25 +198,50 @@ mod tests {
             .iter()
             .map(|value| Cookie::parse(value.to_str().unwrap().to_owned()).unwrap())
             .collect();
-        assert_eq!(cookies.len(), 3);
+        assert_eq!(cookies.len(), 2);
         assert!(
             cookies
                 .iter()
                 .any(|cookie| cookie.name() == "theme" && cookie.value() == "dark")
         );
-        let new_refresh = cookies
-            .iter()
-            .find(|cookie| cookie.name() == "refresh_token")
-            .unwrap();
-        assert_ne!(new_refresh.value(), old_refresh);
-        assert_eq!(new_refresh.path(), Some("/"));
-        assert_eq!(
-            new_refresh.max_age(),
-            Some(Duration::seconds(
-                container.config.jwt.refresh_token_ttl_seconds as i64
-            ))
+        assert!(
+            cookies
+                .iter()
+                .all(|cookie| cookie.name() != "refresh_token")
         );
         assert!(cookies.iter().any(|cookie| cookie.name() == "access_token"));
+
+        let repeated = app
+            .clone()
+            .oneshot(
+                Request::get("/test")
+                    .header(header::COOKIE, format!("refresh_token={old_refresh}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(repeated.status(), StatusCode::OK);
+        assert_eq!(
+            repeated
+                .headers()
+                .get_all(header::SET_COOKIE)
+                .iter()
+                .count(),
+            2
+        );
+        assert!(
+            repeated
+                .headers()
+                .get_all(header::SET_COOKIE)
+                .iter()
+                .all(|value| {
+                    Cookie::parse(value.to_str().unwrap().to_owned())
+                        .unwrap()
+                        .name()
+                        != "refresh_token"
+                })
+        );
 
         let unchanged = app
             .clone()
@@ -220,10 +249,7 @@ mod tests {
                 Request::get("/test")
                     .header(
                         header::COOKIE,
-                        format!(
-                            "access_token={access}; refresh_token={}",
-                            new_refresh.value()
-                        ),
+                        format!("access_token={access}; refresh_token={}", old_refresh),
                     )
                     .body(Body::empty())
                     .unwrap(),
@@ -244,10 +270,7 @@ mod tests {
             .oneshot(
                 Request::get("/test")
                     .header(header::AUTHORIZATION, format!("Bearer {access}"))
-                    .header(
-                        header::COOKIE,
-                        format!("refresh_token={}", new_refresh.value()),
-                    )
+                    .header(header::COOKIE, format!("refresh_token={old_refresh}"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -262,19 +285,12 @@ mod tests {
             1
         );
 
-        for path in [
-            "/api/v1/auth/login",
-            "/api/v1/auth/logout",
-            "/api/v1/auth/refresh",
-        ] {
+        for path in ["/api/v1/auth/login", "/api/v1/auth/refresh"] {
             let bypassed = app
                 .clone()
                 .oneshot(
                     Request::get(path)
-                        .header(
-                            header::COOKIE,
-                            format!("refresh_token={}", new_refresh.value()),
-                        )
+                        .header(header::COOKIE, format!("refresh_token={old_refresh}"))
                         .body(Body::empty())
                         .unwrap(),
                 )

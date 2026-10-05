@@ -297,6 +297,69 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn logout_with_refresh_cookie_clears_cookies_without_access_cookie() {
+        let (app, _) = test_app::setup().await;
+        let login = app
+            .clone()
+            .oneshot(
+                Request::post("/api/v1/auth/login")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        serde_json::json!({
+                            "email": "admin@localhost",
+                            "password": "passwd",
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(login.status(), StatusCode::OK);
+        let body: serde_json::Value =
+            serde_json::from_slice(&to_bytes(login.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        let refresh = body["data"]["refresh_token"].as_str().unwrap();
+
+        let logout = app
+            .clone()
+            .oneshot(
+                Request::post("/api/v1/auth/logout")
+                    .header(header::COOKIE, format!("refresh_token={refresh}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(logout.status(), StatusCode::OK);
+        let cookies: Vec<_> = logout
+            .headers()
+            .get_all(header::SET_COOKIE)
+            .iter()
+            .map(|value| Cookie::parse(value.to_str().unwrap().to_owned()).unwrap())
+            .collect();
+        assert_eq!(cookies.len(), 2);
+        for name in ["access_token", "refresh_token"] {
+            let cookie = cookies.iter().find(|cookie| cookie.name() == name).unwrap();
+            assert_eq!(cookie.value(), "");
+            assert_eq!(cookie.max_age(), Some(Duration::ZERO));
+        }
+
+        let reused = app
+            .oneshot(
+                Request::post("/api/v1/auth/refresh")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        serde_json::json!({ "refresh_token": refresh }).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(reused.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
     async fn refresh_rotates_api_token_and_rejects_reuse() {
         let (app, container) = test_app::setup().await;
         let login = app
@@ -320,6 +383,28 @@ mod tests {
             serde_json::from_slice(&to_bytes(login.into_body(), usize::MAX).await.unwrap())
                 .unwrap();
         let old_refresh = login_body["data"]["refresh_token"].as_str().unwrap();
+
+        let automatic = app
+            .clone()
+            .oneshot(
+                Request::get("/api/v1/auth/me")
+                    .header(header::COOKIE, format!("refresh_token={old_refresh}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(automatic.status(), StatusCode::OK);
+        assert!(
+            automatic
+                .headers()
+                .get_all(header::SET_COOKIE)
+                .iter()
+                .all(|value| Cookie::parse(value.to_str().unwrap().to_owned())
+                    .unwrap()
+                    .name()
+                    != "refresh_token")
+        );
 
         let refresh_request = |token: &str| {
             Request::post("/api/v1/auth/refresh")

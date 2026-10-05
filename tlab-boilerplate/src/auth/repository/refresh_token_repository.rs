@@ -56,6 +56,29 @@ pub async fn rotate(
     Ok(result.rows_affected() == 1)
 }
 
+pub async fn is_valid(
+    context: &mut AppDBCtx<'_>,
+    session_id: Uuid,
+    user_account_id: i64,
+    token_hash: &[u8; 32],
+) -> tlab::Result<bool> {
+    sqlx::query_scalar(
+        r#"SELECT EXISTS (
+               SELECT 1 FROM tlab_refresh_token AS token
+               JOIN tlab_user_account AS account ON account.id = token.user_account_id
+               WHERE token.session_id = $1 AND token.user_account_id = $2
+                 AND token.token_hash = $3 AND token.expires_at > CURRENT_TIMESTAMP
+                 AND account.status = 'active'
+           )"#,
+    )
+    .bind(session_id)
+    .bind(user_account_id)
+    .bind(token_hash.as_slice())
+    .fetch_one(context.backend())
+    .await
+    .map_err(sqlxdb::postgres::map_error)
+}
+
 pub async fn find_all_by_user_account_id(
     context: &mut AppDBCtx<'_>,
     user_account_id: i64,
