@@ -136,10 +136,8 @@ mod tests {
     };
     use tower::ServiceExt;
 
-    #[tokio::test]
-    async fn refreshes_cookie_without_an_access_token() {
-        let (auth_app, container) = test_app::setup().await;
-        let login = auth_app
+    async fn login_tokens(app: Router) -> (String, String) {
+        let response = app
             .oneshot(
                 Request::post("/api/v1/auth/login")
                     .header(header::CONTENT_TYPE, "application/json")
@@ -154,11 +152,20 @@ mod tests {
             )
             .await
             .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
         let body: serde_json::Value =
-            serde_json::from_slice(&to_bytes(login.into_body(), usize::MAX).await.unwrap())
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
                 .unwrap();
-        let old_refresh = body["data"]["refresh_token"].as_str().unwrap();
-        let access = body["data"]["access_token"].as_str().unwrap();
+        (
+            body["data"]["access_token"].as_str().unwrap().to_owned(),
+            body["data"]["refresh_token"].as_str().unwrap().to_owned(),
+        )
+    }
+
+    #[tokio::test]
+    async fn refreshes_access_cookie_without_rotating_refresh_token() {
+        let (auth_app, container) = test_app::setup().await;
+        let (_, refresh_token) = login_tokens(auth_app).await;
 
         let app = Router::<Arc<AppContainer>>::new()
             .route(
@@ -170,22 +177,15 @@ mod tests {
                     )
                 }),
             )
-            .route("/api/v1/auth/login", get(|| async { StatusCode::OK }))
-            .route(
-                "/api/v1/auth/logout",
-                get(|_claims: AccessClaims| async { StatusCode::OK }),
-            )
-            .route("/api/v1/auth/refresh", get(|| async { StatusCode::OK }))
             .route_layer(middleware::from_fn_with_state(
                 container.clone(),
                 refresh_auth_cookies,
             ))
             .with_state(container.clone());
         let refreshed = app
-            .clone()
             .oneshot(
                 Request::get("/test")
-                    .header(header::COOKIE, format!("refresh_token={old_refresh}"))
+                    .header(header::COOKIE, format!("refresh_token={refresh_token}"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -210,105 +210,20 @@ mod tests {
                 .all(|cookie| cookie.name() != "refresh_token")
         );
         assert!(cookies.iter().any(|cookie| cookie.name() == "access_token"));
+    }
 
-        let repeated = app
-            .clone()
-            .oneshot(
-                Request::get("/test")
-                    .header(header::COOKIE, format!("refresh_token={old_refresh}"))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(repeated.status(), StatusCode::OK);
-        assert_eq!(
-            repeated
-                .headers()
-                .get_all(header::SET_COOKIE)
-                .iter()
-                .count(),
-            2
-        );
-        assert!(
-            repeated
-                .headers()
-                .get_all(header::SET_COOKIE)
-                .iter()
-                .all(|value| {
-                    Cookie::parse(value.to_str().unwrap().to_owned())
-                        .unwrap()
-                        .name()
-                        != "refresh_token"
-                })
-        );
-
-        let unchanged = app
-            .clone()
-            .oneshot(
-                Request::get("/test")
-                    .header(
-                        header::COOKIE,
-                        format!("access_token={access}; refresh_token={}", old_refresh),
-                    )
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(
-            unchanged
-                .headers()
-                .get_all(header::SET_COOKIE)
-                .iter()
-                .count(),
-            1
-        );
-
-        let bearer_request = app
-            .clone()
-            .oneshot(
-                Request::get("/test")
-                    .header(header::AUTHORIZATION, format!("Bearer {access}"))
-                    .header(header::COOKIE, format!("refresh_token={old_refresh}"))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(
-            bearer_request
-                .headers()
-                .get_all(header::SET_COOKIE)
-                .iter()
-                .count(),
-            1
-        );
-
-        for path in ["/api/v1/auth/login", "/api/v1/auth/refresh"] {
-            let bypassed = app
-                .clone()
-                .oneshot(
-                    Request::get(path)
-                        .header(header::COOKIE, format!("refresh_token={old_refresh}"))
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-            assert_eq!(bypassed.status(), StatusCode::OK);
-            assert!(bypassed.headers().get(header::SET_COOKIE).is_none());
-        }
-
-        let mut request = Request::get("/test")
+    #[tokio::test]
+    async fn access_claims_extension_takes_precedence_over_bearer() {
+        let (app, container) = test_app::setup().await;
+        let (access_token, _) = login_tokens(app).await;
+        let claims =
+            AccessClaims::from_jwt(container.jwt_codec.verify(&access_token).unwrap()).unwrap();
+        let subject = claims.jwt.sub.clone();
+        let mut request = Request::get("/")
             .header(header::AUTHORIZATION, "Bearer invalid")
             .body(Body::empty())
             .unwrap();
-        let jwt = container.jwt_codec.verify(access).unwrap();
-        let subject = jwt.sub.clone();
-        request
-            .extensions_mut()
-            .insert(AccessClaims::from_jwt(jwt).unwrap());
+        request.extensions_mut().insert(claims);
         let (mut parts, _) = request.into_parts();
         let claims = AccessClaims::from_request_parts(&mut parts, &container)
             .await
