@@ -33,12 +33,14 @@ impl std::str::FromStr for UserStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Provider {
     Managed,
+    Google,
 }
 
 impl Provider {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Managed => "managed",
+            Self::Google => "google",
         }
     }
 }
@@ -49,6 +51,7 @@ impl std::str::FromStr for Provider {
     fn from_str(provider: &str) -> Result<Self, Self::Err> {
         match provider {
             "managed" => Ok(Self::Managed),
+            "google" => Ok(Self::Google),
             _ => Err(()),
         }
     }

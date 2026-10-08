@@ -64,7 +64,7 @@ pub async fn refresh_auth_cookies(
     let is_logout = req.uri().path() == "/api/v1/auth/logout";
     if matches!(
         req.uri().path(),
-        "/api/v1/auth/login" | "/api/v1/auth/refresh"
+        "/api/v1/auth/login" | "/api/v1/auth/refresh" | "/api/v1/auth/google/callback"
     ) {
         return next.run(req).await;
     }
@@ -85,11 +85,12 @@ pub async fn refresh_auth_cookies(
     let Some(refresh_token) = jar.get("refresh_token") else {
         return next.run(req).await;
     };
-    let access = RefreshTokenUsecase::new(container.database.clone(), container.jwt_codec.clone())
-        .execute_access(&RefreshTokenCommand {
-            refresh_token: refresh_token.value().to_owned(),
-        })
-        .await;
+    let access =
+        RefreshTokenUsecase::new(container.database.clone(), container.token_service.clone())
+            .execute_access(&RefreshTokenCommand {
+                refresh_token: refresh_token.value().to_owned(),
+            })
+            .await;
     let access = match access {
         Ok(access) => access,
         Err(tlab::Error::InvalidToken) => return next.run(req).await,

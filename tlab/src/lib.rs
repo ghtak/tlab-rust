@@ -9,6 +9,7 @@ pub mod oracledb;
 pub mod oraclersdb;
 pub mod sqlxdb;
 pub mod tracing;
+pub mod google_oauth2;
 pub use error::*;
 
 #[cfg(test)]

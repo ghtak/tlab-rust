@@ -1,3 +1,5 @@
+mod google_oauth2;
+
 use std::sync::Arc;
 
 use crate::{
@@ -29,6 +31,7 @@ pub fn router() -> axum::Router<Arc<AppContainer>> {
         .route("/api/v1/auth/refresh", post(refresh_token))
         .route("/api/v1/auth/logout", post(logout))
         .route("/api/v1/auth/me", get(me))
+        .merge(google_oauth2::router())
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -114,7 +117,7 @@ async fn login(
     let usecase = auth::usecase::LoginManagedUserUsecase::new(
         container.database.clone(),
         container.password_hasher.clone(),
-        container.jwt_codec.clone(),
+        container.token_service.clone(),
     );
 
     let result = usecase
@@ -149,18 +152,19 @@ async fn refresh_token(
     State(container): State<Arc<AppContainer>>,
     axum::Json(request): axum::Json<RefreshTokenRequest>,
 ) -> Result<impl IntoResponse, ApiResponse<()>> {
-    let tokens = RefreshTokenUsecase::new(container.database.clone(), container.jwt_codec.clone())
-        .execute(&RefreshTokenCommand {
-            refresh_token: request.refresh_token,
-        })
-        .await
-        .map_err(|error| match error {
-            tlab::Error::InvalidToken => ApiResponse::unauthorized("invalid token"),
-            error => {
-                tracing::error!(?error, "Failed to refresh token");
-                ApiResponse::internal_error("failed to refresh token")
-            }
-        })?;
+    let tokens =
+        RefreshTokenUsecase::new(container.database.clone(), container.token_service.clone())
+            .execute(&RefreshTokenCommand {
+                refresh_token: request.refresh_token,
+            })
+            .await
+            .map_err(|error| match error {
+                tlab::Error::InvalidToken => ApiResponse::unauthorized("invalid token"),
+                error => {
+                    tracing::error!(?error, "Failed to refresh token");
+                    ApiResponse::internal_error("failed to refresh token")
+                }
+            })?;
 
     Ok((
         [(header::CACHE_CONTROL, "no-store")],

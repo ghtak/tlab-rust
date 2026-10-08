@@ -14,6 +14,7 @@ pub struct AppContainer {
     pub password_hasher: Arc<dyn tlab::hash::PasswordHasher>,
     pub jwt_codec: Arc<tlab::jwt::JwtCodec>,
     pub rbac_service: Arc<crate::auth::service::RbacService>,
+    pub token_service: Arc<crate::auth::service::TokenService>,
 }
 
 impl AppContainer {
@@ -23,6 +24,7 @@ impl AppContainer {
             &config.password_hash,
         )?);
         let jwt_codec = Arc::new(tlab::jwt::JwtCodec::new(&config.jwt)?);
+        let token_service = Arc::new(crate::auth::service::TokenService::new(jwt_codec.clone()));
         Ok(Self {
             config: config.clone(),
             http: tlab::http::Server::new(config.http.clone()),
@@ -30,6 +32,7 @@ impl AppContainer {
             password_hasher,
             jwt_codec,
             rbac_service: Arc::new(crate::auth::service::RbacService {}),
+            token_service,
         })
     }
 }

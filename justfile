@@ -1,3 +1,4 @@
+set dotenv-load
 set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 
 [working-directory: 'tlab-boilerplate']

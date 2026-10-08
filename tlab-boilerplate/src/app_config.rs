@@ -11,6 +11,7 @@ pub struct AppConfig {
     pub database: tlab::sqlxdb::Config,
     pub password_hash: tlab::hash::Argon2Config,
     pub jwt: tlab::jwt::JwtConfig,
+    pub google_oauth2: tlab::google_oauth2::Config,
 }
 
 impl AppConfig {

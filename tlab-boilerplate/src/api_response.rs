@@ -51,10 +51,6 @@ impl ApiResponse<()> {
     // pub fn not_found(message: impl Into<String>) -> Self {
     //     Self::error(axum::http::StatusCode::NOT_FOUND, message)
     // }
-
-    // pub fn bad_request(message: impl Into<String>) -> Self {
-    //     Self::error(axum::http::StatusCode::BAD_REQUEST, message)
-    // }
 }
 
 impl<T> ApiResponse<T> {

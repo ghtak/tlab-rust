@@ -1,14 +1,7 @@
 use std::sync::Arc;
 
-use chrono::{DateTime, Utc};
-use sha2::{Digest, Sha256};
-use uuid::Uuid;
-
 use crate::app_container::AppDB;
-use crate::auth::{
-    access_claims::AppClaims,
-    repository::{rbac_repository, refresh_token_repository, user_repository},
-};
+use crate::auth::{repository::user_repository, service::TokenService};
 
 //dummy login password
 const DUMMY_LOGIN_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$o90CMRSOfYxJu7s/gJVLzA$QRg9RtFOtSICuubzdE+iJbUo0ct1tJxphWFyp/OLCXo";
@@ -26,19 +19,19 @@ pub struct LoginManagedUserResult {
 pub struct LoginManagedUserUsecase {
     app_db: Arc<AppDB>,
     password_hasher: Arc<dyn tlab::hash::PasswordHasher>,
-    jwt_codec: Arc<tlab::jwt::JwtCodec>,
+    token_service: Arc<TokenService>,
 }
 
 impl LoginManagedUserUsecase {
     pub fn new(
         app_db: Arc<AppDB>,
         password_hasher: Arc<dyn tlab::hash::PasswordHasher>,
-        jwt_codec: Arc<tlab::jwt::JwtCodec>,
+        token_service: Arc<TokenService>,
     ) -> Self {
         Self {
             app_db,
             password_hasher,
-            jwt_codec,
+            token_service,
         }
     }
 
@@ -67,32 +60,10 @@ impl LoginManagedUserUsecase {
         )?;
 
         let account = managed_login_user.account;
-        let role_ids =
-            rbac_repository::find_role_ids_by_user_account_id(&mut conn.context(), account.id)
-                .await?;
-        let session_id = Uuid::new_v4();
-        let app = serde_json::to_value(AppClaims {
-            role_ids,
-            session_id,
-        })
-        .map_err(anyhow::Error::from)?;
         let tokens = self
-            .jwt_codec
-            .issue_pair(&account.id.to_string(), Some(app))?;
-        let token_hash: [u8; 32] = Sha256::digest(tokens.refresh.token.as_bytes()).into();
-        let expires_at = i64::try_from(tokens.refresh.expires_at)
-            .ok()
-            .and_then(|timestamp| DateTime::<Utc>::from_timestamp(timestamp, 0))
-            .ok_or_else(|| tlab::Error::IllegalState("invalid refresh token expiration".into()))?;
-
-        refresh_token_repository::save(
-            &mut conn.context(),
-            session_id,
-            account.id,
-            &token_hash,
-            expires_at,
-        )
-        .await?;
+            .token_service
+            .issue_login_tokens(&mut conn.context(), account.id)
+            .await?;
 
         Ok(LoginManagedUserResult { tokens })
     }
@@ -101,13 +72,16 @@ impl LoginManagedUserUsecase {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::auth::entity;
     use crate::auth::usecase::{
         CreateManagedUserCommand, CreateManagedUserUsecase, LogoutUserCommand, LogoutUserUsecase,
     };
+    use crate::auth::{access_claims::AppClaims, entity, repository::refresh_token_repository};
     use crate::test_db;
+    use chrono::Utc;
+    use sha2::{Digest, Sha256};
     use tlab::hash::{Argon2Config, Argon2PasswordHasher, PasswordHasher};
     use tlab::jwt::{EdDsaKeyFiles, JwtCodec, JwtConfig, TokenUse};
+    use uuid::Uuid;
 
     fn jwt_codec() -> Arc<JwtCodec> {
         let directory = std::env::temp_dir().join(format!(
@@ -209,7 +183,11 @@ mod tests {
             .unwrap();
         drop(conn);
         let jwt_codec = jwt_codec();
-        let usecase = LoginManagedUserUsecase::new(app_db.clone(), hasher, jwt_codec.clone());
+        let usecase = LoginManagedUserUsecase::new(
+            app_db.clone(),
+            hasher,
+            Arc::new(TokenService::new(jwt_codec.clone())),
+        );
 
         let logged_in = usecase
             .execute(&LoginManagedUserCommand {
@@ -251,7 +229,11 @@ mod tests {
         let hasher = password_hasher();
         let account = create_user(&app_db, &hasher).await;
         let jwt_codec = jwt_codec();
-        let login = LoginManagedUserUsecase::new(app_db.clone(), hasher, jwt_codec.clone());
+        let login = LoginManagedUserUsecase::new(
+            app_db.clone(),
+            hasher,
+            Arc::new(TokenService::new(jwt_codec.clone())),
+        );
         let command = LoginManagedUserCommand {
             email: account.email.clone(),
             password: "correct password".into(),
@@ -303,8 +285,11 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_login_for_missing_account() {
-        let usecase =
-            LoginManagedUserUsecase::new(test_db::connect().await, password_hasher(), jwt_codec());
+        let usecase = LoginManagedUserUsecase::new(
+            test_db::connect().await,
+            password_hasher(),
+            Arc::new(TokenService::new(jwt_codec())),
+        );
 
         let result = usecase
             .execute(&LoginManagedUserCommand {
@@ -321,7 +306,11 @@ mod tests {
         let app_db = test_db::connect().await;
         let hasher = password_hasher();
         let account = create_user(&app_db, &hasher).await;
-        let usecase = LoginManagedUserUsecase::new(app_db.clone(), hasher, jwt_codec());
+        let usecase = LoginManagedUserUsecase::new(
+            app_db.clone(),
+            hasher,
+            Arc::new(TokenService::new(jwt_codec())),
+        );
 
         let result = usecase
             .execute(&LoginManagedUserCommand {

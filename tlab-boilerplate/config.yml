@@ -42,3 +42,8 @@ jwt:
   audience: "tlab-boilerplate"
   access_token_ttl_seconds: 900
   refresh_token_ttl_seconds: 2592000
+
+google_oauth2:
+  client_id: ""
+  client_secret: ""
+  redirect_uri: ""

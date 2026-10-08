@@ -272,6 +272,24 @@ pub async fn create_user_identity(
     row.into_entity()
 }
 
+pub async fn find_user_identity(
+    context: &mut AppDBCtx<'_>,
+    provider: entity::Provider,
+    provider_subject: &str,
+) -> tlab::Result<Option<entity::UserIdentity>> {
+    let row = sqlx::query_as::<_, UserIdentityRow>(
+        r#"SELECT id, user_account_id, provider, provider_subject, provider_email, created_at, last_login_at
+           FROM tlab_user_identity WHERE provider = $1 AND provider_subject = $2"#,
+    )
+    .bind(provider.as_str())
+    .bind(provider_subject)
+    .fetch_optional(context.backend())
+    .await
+    .map_err(sqlxdb::postgres::map_error)?;
+
+    row.map(UserIdentityRow::into_entity).transpose()
+}
+
 pub async fn update_user_identity(
     context: &mut AppDBCtx<'_>,
     user_identity: &entity::UserIdentity,
