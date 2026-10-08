@@ -1,14 +1,15 @@
 import { useState, type SubmitEvent } from 'react'
-import { useNavigate } from '@tanstack/react-router'
+import { useLocation, useNavigate } from '@tanstack/react-router'
 import { HTTPError } from 'ky'
 import { useLogin } from '../hooks/useLogin'
-import { Button } from '../../../components/ui/button'
+import { Button, buttonVariants } from '../../../components/ui/button'
 
 export function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const signIn = useLogin()
   const navigate = useNavigate()
+  const googleError = useLocation({ select: (location) => new URLSearchParams(location.searchStr).get('error') })
 
   function submit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -20,6 +21,13 @@ export function LoginPage() {
   }
 
   const invalidCredentials = signIn.error instanceof HTTPError && signIn.error.response.status === 401
+  const googleErrorMessage = googleError === 'google_cancelled'
+    ? 'Google 로그인이 취소되었습니다.'
+    : googleError === 'account_exists'
+      ? '이미 같은 이메일로 가입된 계정이 있습니다. 기존 계정으로 로그인해 주세요.'
+      : googleError
+        ? 'Google로 로그인하지 못했습니다. 다시 시도해 주세요.'
+        : null
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted/40 px-4 py-12">
@@ -47,6 +55,15 @@ export function LoginPage() {
             {signIn.isPending ? '로그인 중...' : '로그인'}
           </Button>
         </form>
+        <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground">
+          <span className="h-px flex-1 bg-border" />
+          또는
+          <span className="h-px flex-1 bg-border" />
+        </div>
+        <a href="/api/v1/auth/google/auth_url" className={buttonVariants({ variant: 'outline', size: 'lg', className: 'w-full' })}>
+          Google로 계속하기
+        </a>
+        {googleErrorMessage && <p role="alert" className="mt-4 text-sm text-destructive">{googleErrorMessage}</p>}
       </div>
     </main>
   )

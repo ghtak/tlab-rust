@@ -12,7 +12,6 @@ use crate::{
 
 pub struct LoginGoogleUserCommand {
     pub code: String,
-    pub state: Option<String>,
 }
 
 pub struct LoginGoogleUserUsecase {
@@ -38,10 +37,6 @@ impl LoginGoogleUserUsecase {
         &self,
         command: &LoginGoogleUserCommand,
     ) -> tlab::Result<tlab::jwt::TokenPair> {
-        if !verify_oauth2_state(command.state.as_deref()) {
-            return Err(tlab::Error::InvalidToken);
-        }
-
         let claims =
             tlab::google_oauth2::handle_oauth2_callback(&self.google_oauth2, &command.code).await?;
         self.login_with_claims(claims).await
@@ -66,6 +61,9 @@ impl LoginGoogleUserUsecase {
             account
         } else {
             drop(conn);
+            if !claims.email_verified {
+                return Err(tlab::Error::InvalidCredentials);
+            }
             let email = claims
                 .email
                 .filter(|email| !email.is_empty())
@@ -95,16 +93,30 @@ impl LoginGoogleUserUsecase {
     }
 }
 
-fn verify_oauth2_state(state: Option<&str>) -> bool {
-    // TODO: Bind the state to the authorization request and verify it here.
-    state.is_some_and(|value| uuid::Uuid::parse_str(value).is_ok())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{auth::repository::refresh_token_repository, test_app, test_db};
     use tlab::jwt::TokenUse;
+
+    #[tokio::test]
+    async fn rejects_unverified_email_for_new_google_user() {
+        let (_, app) = test_app::setup().await;
+        let usecase = LoginGoogleUserUsecase::new(
+            app.database.clone(),
+            app.token_service.clone(),
+            app.config.google_oauth2.clone(),
+        );
+        let result = usecase
+            .login_with_claims(tlab::google_oauth2::GoogleIdTokenClaims {
+                sub: uuid::Uuid::new_v4().to_string(),
+                email: Some(test_db::unique_email("unverified-google")),
+                email_verified: false,
+                name: Some("Alice".into()),
+            })
+            .await;
+        assert!(matches!(result, Err(tlab::Error::InvalidCredentials)));
+    }
 
     #[tokio::test]
     async fn logs_in_google_user_and_reuses_existing_account() {
@@ -122,6 +134,7 @@ mod tests {
                 .login_with_claims(tlab::google_oauth2::GoogleIdTokenClaims {
                     sub: subject.clone(),
                     email: Some(email.clone()),
+                    email_verified: true,
                     name: Some("Alice".into()),
                 })
                 .await

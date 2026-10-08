@@ -14,6 +14,7 @@ struct GoogleTokenResponse {
 pub struct GoogleIdTokenClaims {
     pub sub: String,
     pub email: Option<String>,
+    pub email_verified: bool,
     pub name: Option<String>,
 }
 
@@ -58,6 +59,7 @@ pub async fn handle_oauth2_callback(
     Ok(GoogleIdTokenClaims {
         sub: id_token.sub,
         email: id_token.email,
+        email_verified: id_token.email_verified == Some(true),
         name: id_token.name,
     })
 }
