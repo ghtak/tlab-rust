@@ -1,4 +1,5 @@
 mod google_oauth2;
+mod permissions;
 
 use std::sync::Arc;
 
@@ -32,6 +33,7 @@ pub fn router() -> axum::Router<Arc<AppContainer>> {
         .route("/api/v1/auth/logout", post(logout))
         .route("/api/v1/auth/me", get(me))
         .merge(google_oauth2::router())
+        .merge(permissions::router())
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]

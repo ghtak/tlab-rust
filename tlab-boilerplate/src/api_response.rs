@@ -28,6 +28,10 @@ impl ApiResponse<()> {
         Self::error(axum::http::StatusCode::UNAUTHORIZED, message)
     }
 
+    pub fn bad_request(message: impl Into<String>) -> Self {
+        Self::error(axum::http::StatusCode::BAD_REQUEST, message)
+    }
+
     pub fn forbidden(message: impl Into<String>) -> Self {
         Self::error(axum::http::StatusCode::FORBIDDEN, message)
     }

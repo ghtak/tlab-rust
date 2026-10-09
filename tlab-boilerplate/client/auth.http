@@ -23,3 +23,8 @@ Content-Type: application/json
 ### Me
 GET {{baseUrl}}/api/v1/auth/me
 Authorization: Bearer {{login.response.body.$.data.access_token}}
+
+
+### Permission
+GET {{baseUrl}}/api/v1/auth/permissions?code=
+Authorization: Bearer {{login.response.body.$.data.access_token}}
