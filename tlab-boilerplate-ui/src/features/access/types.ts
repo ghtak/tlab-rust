@@ -71,6 +71,12 @@ export type User = {
 	status: UserStatus;
 	roles: string[];
 	providers: string[];
+	latest_login_at: string | null;
+};
+
+export type ChangeUserStatusInput = {
+	userId: number;
+	status: "active" | "suspended";
 };
 
 export type UserListParams = {

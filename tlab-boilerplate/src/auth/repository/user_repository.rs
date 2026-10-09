@@ -41,12 +41,14 @@ struct UserListRow {
     account: UserAccountRow,
     roles: Vec<String>,
     providers: Vec<String>,
+    latest_login_at: Option<DateTime<Utc>>,
 }
 
 pub struct UserListItem {
     pub account: entity::UserAccount,
     pub roles: Vec<String>,
     pub providers: Vec<String>,
+    pub latest_login_at: Option<DateTime<Utc>>,
 }
 
 pub async fn find_user_accounts(
@@ -79,7 +81,10 @@ pub async fn find_user_accounts(
                ARRAY(SELECT DISTINCT identity.provider::TEXT
                      FROM tlab_user_identity AS identity
                      WHERE identity.user_account_id = account.id
-                     ORDER BY identity.provider::TEXT) AS providers
+                     ORDER BY identity.provider::TEXT) AS providers,
+               (SELECT MAX(identity.last_login_at)
+                FROM tlab_user_identity AS identity
+                WHERE identity.user_account_id = account.id) AS latest_login_at
         FROM tlab_user_account AS account
         WHERE ($1::TEXT IS NULL OR account.name ILIKE '%' || $1 || '%' OR account.email ILIKE '%' || $1 || '%')
           AND ($2::TEXT IS NULL OR account.status = $2)
@@ -102,6 +107,7 @@ pub async fn find_user_accounts(
                     account: row.account.into_entity()?,
                     roles: row.roles,
                     providers: row.providers,
+                    latest_login_at: row.latest_login_at,
                 })
             })
             .collect::<tlab::Result<Vec<_>>>()?,
@@ -465,6 +471,20 @@ pub async fn update_user_identity(
     .map_err(sqlxdb::postgres::map_error)?;
 
     row.map(UserIdentityRow::into_entity).transpose()
+}
+
+pub async fn mark_login(context: &mut AppDBCtx<'_>, user_identity_id: i64) -> tlab::Result<()> {
+    let updated = sqlx::query(
+        "UPDATE tlab_user_identity SET last_login_at = CURRENT_TIMESTAMP WHERE id = $1",
+    )
+    .bind(user_identity_id)
+    .execute(context.backend())
+    .await
+    .map_err(sqlxdb::postgres::map_error)?;
+    if updated.rows_affected() == 0 {
+        return Err(tlab::Error::NotFound("user identity".into()));
+    }
+    Ok(())
 }
 
 pub async fn delete_user_identity(

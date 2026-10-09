@@ -6,6 +6,7 @@ mod logout_user;
 mod refresh_token;
 mod set_role_permissions;
 mod set_user_roles;
+mod set_user_status;
 
 pub use create_managed_user::*;
 pub use create_social_user::*;
@@ -15,3 +16,4 @@ pub use logout_user::*;
 pub use refresh_token::*;
 pub use set_role_permissions::*;
 pub use set_user_roles::*;
+pub use set_user_status::*;

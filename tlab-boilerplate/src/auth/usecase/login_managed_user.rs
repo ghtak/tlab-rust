@@ -59,11 +59,13 @@ impl LoginManagedUserUsecase {
             &managed_login_user.credential.password_hash,
         )?;
 
+        let identity_id = managed_login_user.credential.user_identity_id;
         let account = managed_login_user.account;
         let tokens = self
             .token_service
             .issue_login_tokens(&mut conn.context(), account.id)
             .await?;
+        user_repository::mark_login(&mut conn.context(), identity_id).await?;
 
         Ok(LoginManagedUserResult { tokens })
     }
@@ -219,6 +221,15 @@ mod tests {
             Sha256::digest(logged_in.tokens.refresh.token.as_bytes()).into();
         assert_eq!(stored.token_hash, expected_hash);
         assert_eq!(stored.expires_at.timestamp(), refresh.exp as i64);
+        let identity = user_repository::find_user_identity(
+            &mut conn.context(),
+            entity::Provider::Managed,
+            &account.email,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert!(identity.last_login_at.is_some());
         drop(conn);
         delete_user(&app_db, &account).await;
     }

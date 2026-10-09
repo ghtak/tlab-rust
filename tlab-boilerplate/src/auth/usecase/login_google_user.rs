@@ -46,11 +46,12 @@ impl LoginGoogleUserUsecase {
         &self,
         claims: tlab::google_oauth2::GoogleIdTokenClaims,
     ) -> tlab::Result<tlab::jwt::TokenPair> {
+        let subject = claims.sub.clone();
         let mut conn = self.app_db.conn().await?;
         let identity =
             user_repository::find_user_identity(&mut conn.context(), Provider::Google, &claims.sub)
                 .await?;
-        let account = if let Some(identity) = identity {
+        let (account, identity_id) = if let Some(identity) = identity {
             let account =
                 user_repository::find_user_account(&mut conn.context(), identity.user_account_id)
                     .await?
@@ -58,7 +59,7 @@ impl LoginGoogleUserUsecase {
                         tlab::Error::IllegalState("social user account not found".into())
                     })?;
             drop(conn);
-            account
+            (account, identity.id)
         } else {
             drop(conn);
             if !claims.email_verified {
@@ -77,9 +78,18 @@ impl LoginGoogleUserUsecase {
                 provider: Provider::Google,
                 provider_subject: claims.sub,
             };
-            CreateSocialUserUsecase::new(self.app_db.clone())
+            let account = CreateSocialUserUsecase::new(self.app_db.clone())
                 .execute(&command)
-                .await?
+                .await?;
+            let mut conn = self.app_db.conn().await?;
+            let identity = user_repository::find_user_identity(
+                &mut conn.context(),
+                Provider::Google,
+                &subject,
+            )
+            .await?
+            .ok_or_else(|| tlab::Error::IllegalState("social user identity not found".into()))?;
+            (account, identity.id)
         };
 
         if account.status != UserStatus::Active {
@@ -87,9 +97,12 @@ impl LoginGoogleUserUsecase {
         }
 
         let mut conn = self.app_db.conn().await?;
-        self.token_service
+        let tokens = self
+            .token_service
             .issue_login_tokens(&mut conn.context(), account.id)
-            .await
+            .await?;
+        user_repository::mark_login(&mut conn.context(), identity_id).await?;
+        Ok(tokens)
     }
 }
 
@@ -152,6 +165,7 @@ mod tests {
                 .await
                 .unwrap()
                 .unwrap();
+        assert!(identity.last_login_at.is_some());
         let sessions = refresh_token_repository::find_all_by_user_account_id(
             &mut conn.context(),
             identity.user_account_id,

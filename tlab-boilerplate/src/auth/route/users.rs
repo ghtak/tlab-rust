@@ -13,7 +13,9 @@ use crate::{
         entity::{Role, UserStatus},
         permission,
         repository::user_repository,
-        usecase::{SetUserRolesCommand, SetUserRolesUsecase},
+        usecase::{
+            SetUserRolesCommand, SetUserRolesUsecase, SetUserStatusCommand, SetUserStatusUsecase,
+        },
     },
 };
 
@@ -21,9 +23,51 @@ pub(super) fn router() -> axum::Router<Arc<AppContainer>> {
     axum::Router::new()
         .route("/api/v1/auth/users", get(list_users))
         .route(
+            "/api/v1/auth/users/{id}/status",
+            axum::routing::patch(set_user_status),
+        )
+        .route(
             "/api/v1/auth/users/{id}/roles",
             get(list_user_roles).patch(set_user_roles),
         )
+}
+
+#[derive(serde::Deserialize)]
+struct SetUserStatusRequest {
+    status: String,
+}
+
+async fn set_user_status(
+    State(container): State<Arc<AppContainer>>,
+    claims: AccessClaims,
+    Path(id): Path<i64>,
+    axum::Json(request): axum::Json<SetUserStatusRequest>,
+) -> ApiResult<()> {
+    permission::require(&container, &claims, permission::USER_MANAGE).await?;
+    let status = request
+        .status
+        .parse::<UserStatus>()
+        .map_err(|_| ApiResponse::bad_request("invalid status"))?;
+    if status == UserStatus::Withdrawn {
+        return Err(ApiResponse::bad_request("invalid status"));
+    }
+
+    SetUserStatusUsecase::new(container.database.clone())
+        .execute(&SetUserStatusCommand {
+            user_account_id: id,
+            actor_id: claims.user_account_id()?,
+            status,
+        })
+        .await
+        .map_err(|error| match error {
+            tlab::Error::NotFound(_) => ApiResponse::not_found("user not found"),
+            tlab::Error::InvalidOperation(message) => ApiResponse::bad_request(message),
+            error => {
+                tracing::error!(?error, "Failed to set user status");
+                ApiResponse::internal_error("failed to set user status")
+            }
+        })?;
+    Ok(ApiResponse::ok())
 }
 
 #[derive(serde::Serialize)]
@@ -140,6 +184,7 @@ struct UserListItemResponse {
     status: String,
     roles: Vec<String>,
     providers: Vec<String>,
+    latest_login_at: Option<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -198,6 +243,7 @@ async fn list_users(
                 status: item.account.status.as_str().to_owned(),
                 roles: item.roles,
                 providers: item.providers,
+                latest_login_at: item.latest_login_at.map(|value| value.to_rfc3339()),
             })
             .collect(),
         total: paging.total,
@@ -215,6 +261,105 @@ mod tests {
     use tower::ServiceExt;
 
     use crate::test_app;
+
+    #[tokio::test]
+    async fn changes_user_status_without_reactivating_withdrawn_or_suspending_initial_admin() {
+        let (app, container) = test_app::setup().await;
+        let login = app
+            .clone()
+            .oneshot(
+                Request::post("/api/v1/auth/login")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        serde_json::json!({ "email": "admin@localhost", "password": "passwd" })
+                            .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body: serde_json::Value =
+            serde_json::from_slice(&to_bytes(login.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        let token = body["data"]["access_token"].as_str().unwrap();
+
+        let mut conn = container.database.conn().await.unwrap();
+        let email = format!("status-{}@example.com", uuid::Uuid::new_v4().simple());
+        let user_id: i64 = sqlx::query_scalar(
+            "INSERT INTO tlab_user_account (name, email) VALUES ('Status test', $1) RETURNING id",
+        )
+        .bind(email)
+        .fetch_one(conn.context().backend())
+        .await
+        .unwrap();
+        let path = format!("/api/v1/auth/users/{user_id}/status");
+
+        for (status, expected) in [("suspended", StatusCode::OK), ("active", StatusCode::OK)] {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::patch(&path)
+                        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .body(Body::from(
+                            serde_json::json!({ "status": status }).to_string(),
+                        ))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), expected);
+        }
+        let status: String =
+            sqlx::query_scalar("SELECT status FROM tlab_user_account WHERE id = $1")
+                .bind(user_id)
+                .fetch_one(conn.context().backend())
+                .await
+                .unwrap();
+        assert_eq!(status, "active");
+
+        sqlx::query("UPDATE tlab_user_account SET status = 'withdrawn' WHERE id = $1")
+            .bind(user_id)
+            .execute(conn.context().backend())
+            .await
+            .unwrap();
+        let response = app
+            .clone()
+            .oneshot(
+                Request::patch(&path)
+                    .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(r#"{"status":"active"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        let admin_id: i64 =
+            sqlx::query_scalar("SELECT id FROM tlab_user_account WHERE email = 'admin@localhost'")
+                .fetch_one(conn.context().backend())
+                .await
+                .unwrap();
+        let response = app
+            .clone()
+            .oneshot(
+                Request::patch(format!("/api/v1/auth/users/{admin_id}/status"))
+                    .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(r#"{"status":"suspended"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        sqlx::query("DELETE FROM tlab_user_account WHERE id = $1")
+            .bind(user_id)
+            .execute(conn.context().backend())
+            .await
+            .unwrap();
+    }
 
     #[tokio::test]
     async fn changes_user_roles_and_protects_initial_admin() {
@@ -402,6 +547,15 @@ mod tests {
             .await
             .unwrap();
         }
+        sqlx::query(
+            "UPDATE tlab_user_identity SET last_login_at = CASE provider \
+             WHEN 'managed' THEN '2024-01-01T00:00:00Z'::TIMESTAMPTZ \
+             ELSE '2025-01-01T00:00:00Z'::TIMESTAMPTZ END WHERE user_account_id = $1",
+        )
+        .bind(active_id)
+        .execute(conn.context().backend())
+        .await
+        .unwrap();
 
         let response = app
             .clone()
@@ -429,6 +583,12 @@ mod tests {
         assert_eq!(
             body["data"]["items"][0]["providers"],
             serde_json::json!(["google", "managed"])
+        );
+        assert!(
+            body["data"]["items"][0]["latest_login_at"]
+                .as_str()
+                .unwrap()
+                .starts_with("2025-01-01T00:00:00")
         );
 
         let response = app
@@ -468,6 +628,7 @@ mod tests {
         assert_eq!(body["data"]["items"][0]["id"], suspended_id);
         assert_eq!(body["data"]["items"][0]["roles"], serde_json::json!([]));
         assert_eq!(body["data"]["items"][0]["providers"], serde_json::json!([]));
+        assert!(body["data"]["items"][0]["latest_login_at"].is_null());
 
         for path in [
             "/api/v1/auth/users?page=0",

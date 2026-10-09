@@ -2,6 +2,7 @@ import { api } from "../../../api";
 import type {
 	ChangeRolePermissionsInput,
 	ChangeUserRolesInput,
+	ChangeUserStatusInput,
 	CreatePermissionInput,
 	CreateRoleInput,
 	Permission,
@@ -119,6 +120,13 @@ export async function getUserRoles(userId: number): Promise<UserRoles> {
 		.get(`auth/users/${userId}/roles`)
 		.json<{ data: UserRoles }>();
 	return response.data;
+}
+
+export async function changeUserStatus({
+	userId,
+	status,
+}: ChangeUserStatusInput): Promise<void> {
+	await api.patch(`auth/users/${userId}/status`, { json: { status } });
 }
 
 export async function changeUserRoles({

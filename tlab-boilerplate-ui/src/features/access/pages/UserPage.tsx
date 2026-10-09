@@ -1,12 +1,23 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { HTTPError } from "ky";
 import {
 	ChevronDownIcon,
 	KeyRoundIcon,
 	MoreHorizontalIcon,
+	PowerIcon,
 } from "lucide-react";
 import { useState } from "react";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "../../../components/ui/alert-dialog";
 import { Button } from "../../../components/ui/button";
 import { Card, CardHeader, CardTitle } from "../../../components/ui/card";
 import {
@@ -32,26 +43,49 @@ import {
 	TableHeader,
 	TableRow,
 } from "../../../components/ui/table";
+import { changeUserStatus } from "../services/api";
 import { usersQuery } from "../services/queries";
-import type { UserStatus } from "../types";
+import type { User, UserStatus } from "../types";
 
 const PAGE_SIZE = 20;
 
 const statusLabels: Record<UserStatus, string> = {
 	active: "활성",
-	suspended: "중지",
+	suspended: "비활성",
 	withdrawn: "탈퇴",
 };
 
+const statusStyles: Record<UserStatus, string> = {
+	active: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+	suspended: "bg-amber-50 text-amber-700 ring-amber-200",
+	withdrawn: "bg-slate-100 text-slate-600 ring-slate-200",
+};
+
+const loginDateFormat = new Intl.DateTimeFormat("ko-KR", {
+	dateStyle: "medium",
+	timeStyle: "short",
+});
+
 export function UserPage() {
 	const navigate = useNavigate();
+	const queryClient = useQueryClient();
 	const [inputQ, setInputQ] = useState("");
 	const [q, setQ] = useState("");
 	const [status, setStatus] = useState<UserStatus | "">("");
 	const [page, setPage] = useState(1);
+	const [userToChangeStatus, setUserToChangeStatus] = useState<User | null>(
+		null,
+	);
 	const { data, error, isPending } = useQuery(
 		usersQuery({ q, status, page, pageSize: PAGE_SIZE }),
 	);
+	const statusChange = useMutation({
+		mutationFn: changeUserStatus,
+		onSuccess: async () => {
+			setUserToChangeStatus(null);
+			await queryClient.invalidateQueries({ queryKey: ["users"] });
+		},
+	});
 	const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE));
 	const firstVisiblePage = Math.max(1, Math.min(page - 2, totalPages - 4));
 	const visiblePages = Array.from(
@@ -98,7 +132,7 @@ export function UserPage() {
 									[
 										["", "전체 상태"],
 										["active", "활성"],
-										["suspended", "중지"],
+										["suspended", "비활성"],
 										["withdrawn", "탈퇴"],
 									] as const
 								).map(([value, label]) => (
@@ -157,7 +191,7 @@ export function UserPage() {
 					</p>
 				) : (
 					<div className="overflow-x-auto">
-						<Table className="min-w-[720px]">
+						<Table className="min-w-[860px]">
 							<TableHeader className="bg-slate-50 text-xs text-slate-500">
 								<TableRow>
 									<TableHead className="px-5 sm:px-6">이름</TableHead>
@@ -165,6 +199,7 @@ export function UserPage() {
 									<TableHead className="px-5 sm:px-6">상태</TableHead>
 									<TableHead className="px-5 sm:px-6">롤</TableHead>
 									<TableHead className="px-5 sm:px-6">로그인 수단</TableHead>
+									<TableHead className="px-5 sm:px-6">마지막 로그인</TableHead>
 									<TableHead className="w-16 px-5 text-right sm:px-6">
 										작업
 									</TableHead>
@@ -179,8 +214,12 @@ export function UserPage() {
 										<TableCell className="px-5 py-4 text-slate-600 sm:px-6">
 											{user.email}
 										</TableCell>
-										<TableCell className="px-5 py-4 text-slate-600 sm:px-6">
-											{statusLabels[user.status]}
+										<TableCell className="px-5 py-4 sm:px-6">
+											<span
+												className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${statusStyles[user.status]}`}
+											>
+												{statusLabels[user.status]}
+											</span>
 										</TableCell>
 										<TableCell className="px-5 py-4 text-slate-600 sm:px-6">
 											{user.roles.length > 0 ? user.roles.join(", ") : "—"}
@@ -189,6 +228,11 @@ export function UserPage() {
 											{user.providers.length > 0
 												? user.providers.join(", ")
 												: "—"}
+										</TableCell>
+										<TableCell className="px-5 py-4 text-slate-600 sm:px-6">
+											{user.latest_login_at
+												? loginDateFormat.format(new Date(user.latest_login_at))
+												: "기록 없음"}
 										</TableCell>
 										<TableCell className="px-5 py-4 text-right sm:px-6">
 											<DropdownMenu>
@@ -209,6 +253,20 @@ export function UserPage() {
 													>
 														<KeyRoundIcon /> 롤 관리
 													</DropdownMenuItem>
+													{user.status !== "withdrawn" &&
+														user.email !== "admin@localhost" && (
+															<DropdownMenuItem
+																onClick={() => {
+																	statusChange.reset();
+																	setUserToChangeStatus(user);
+																}}
+															>
+																<PowerIcon />{" "}
+																{user.status === "active"
+																	? "계정 비활성화"
+																	: "계정 활성화"}
+															</DropdownMenuItem>
+														)}
 												</DropdownMenuContent>
 											</DropdownMenu>
 										</TableCell>
@@ -271,6 +329,70 @@ export function UserPage() {
 					</Pagination>
 				</div>
 			</Card>
+			<AlertDialog
+				open={userToChangeStatus !== null}
+				onOpenChange={(open) => {
+					if (!open && !statusChange.isPending) setUserToChangeStatus(null);
+				}}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>
+							{userToChangeStatus?.status === "active"
+								? "계정을 비활성화할까요?"
+								: "계정을 활성화할까요?"}
+						</AlertDialogTitle>
+						<AlertDialogDescription>
+							{userToChangeStatus?.email} 계정의 상태를 변경합니다.
+							{userToChangeStatus?.status === "active" && (
+								<>
+									{" "}
+									현재 로그인 세션은 즉시 종료되지 않으며, 다음 로그인부터
+									차단됩니다.
+								</>
+							)}
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					{statusChange.isError && (
+						<p role="alert" className="text-sm text-destructive">
+							{statusChange.error instanceof HTTPError &&
+							statusChange.error.response.status === 400
+								? "현재 계정 상태에서는 변경할 수 없습니다. 목록을 새로고침해 주세요."
+								: "계정 상태를 변경하지 못했습니다. 다시 시도해 주세요."}
+						</p>
+					)}
+					<AlertDialogFooter>
+						<AlertDialogCancel disabled={statusChange.isPending} autoFocus>
+							취소
+						</AlertDialogCancel>
+						<AlertDialogAction
+							variant={
+								userToChangeStatus?.status === "active"
+									? "destructive"
+									: "default"
+							}
+							disabled={statusChange.isPending}
+							onClick={() => {
+								if (userToChangeStatus) {
+									statusChange.mutate({
+										userId: userToChangeStatus.id,
+										status:
+											userToChangeStatus.status === "active"
+												? "suspended"
+												: "active",
+									});
+								}
+							}}
+						>
+							{statusChange.isPending
+								? "변경 중..."
+								: userToChangeStatus?.status === "active"
+									? "비활성화"
+									: "활성화"}
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</div>
 	);
 }
