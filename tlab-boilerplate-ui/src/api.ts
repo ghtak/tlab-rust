@@ -1,3 +1,3 @@
-import ky from 'ky'
+import ky from "ky";
 
-export const api = ky.create({ prefix: '/api/v1', retry: 0 })
+export const api = ky.create({ prefix: "/api/v1", retry: 0 });
