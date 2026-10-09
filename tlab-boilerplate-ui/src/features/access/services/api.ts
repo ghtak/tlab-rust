@@ -1,9 +1,13 @@
 import { api } from "../../../api";
 import type {
 	CreatePermissionInput,
+	CreateRoleInput,
 	Permission,
 	PermissionList,
 	PermissionListParams,
+	Role,
+	RoleList,
+	RoleListParams,
 } from "../types";
 
 export async function createPermission(
@@ -33,5 +37,33 @@ export async function getPermissions({
 			},
 		})
 		.json<{ data: PermissionList }>();
+	return response.data;
+}
+
+export async function createRole(input: CreateRoleInput): Promise<Role> {
+	const response = await api
+		.post("auth/roles", { json: input })
+		.json<{ data: Role }>();
+	return response.data;
+}
+
+export async function deleteRole(id: number): Promise<void> {
+	await api.delete(`auth/roles/${id}`);
+}
+
+export async function getRoles({
+	code,
+	page,
+	pageSize,
+}: RoleListParams): Promise<RoleList> {
+	const response = await api
+		.get("auth/roles", {
+			searchParams: {
+				...(code ? { code } : {}),
+				page: String(page),
+				page_size: String(pageSize),
+			},
+		})
+		.json<{ data: RoleList }>();
 	return response.data;
 }

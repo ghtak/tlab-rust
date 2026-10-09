@@ -77,6 +77,13 @@ pub struct Permission {
 }
 
 #[derive(Debug, Clone)]
+pub struct Role {
+    pub id: i64,
+    pub code: String,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone)]
 pub struct UserIdentity {
     pub id: i64,
     pub user_account_id: i64,
