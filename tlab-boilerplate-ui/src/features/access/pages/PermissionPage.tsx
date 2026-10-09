@@ -20,6 +20,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "../../../components/ui/table";
+import { CreatePermissionDialog } from "../components/CreatePermissionDialog";
 import { permissionsQuery } from "../services/queries";
 
 const PAGE_SIZE = 20;
@@ -40,14 +41,17 @@ export function PermissionPage() {
 
 	return (
 		<div className="space-y-5">
-			<div>
-				<p className="mb-2 text-sm text-slate-500">
-					접근 관리 / <span className="text-slate-900">퍼미션</span>
-				</p>
-				<h1 className="text-3xl font-semibold tracking-tight">퍼미션</h1>
-				<p className="mt-1 text-sm text-slate-500">
-					서비스에서 사용하는 퍼미션을 조회합니다.
-				</p>
+			<div className="flex flex-wrap items-end justify-between gap-4">
+				<div>
+					<p className="mb-2 text-sm text-slate-500">
+						접근 관리 / <span className="text-slate-900">퍼미션</span>
+					</p>
+					<h1 className="text-3xl font-semibold tracking-tight">퍼미션</h1>
+					<p className="mt-1 text-sm text-slate-500">
+						서비스에서 사용하는 퍼미션을 조회합니다.
+					</p>
+				</div>
+				<CreatePermissionDialog />
 			</div>
 
 			<Card className="gap-0 bg-white py-0 shadow-sm">

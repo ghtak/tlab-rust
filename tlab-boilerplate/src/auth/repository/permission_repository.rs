@@ -2,6 +2,27 @@ use tlab::sqlxdb;
 
 use crate::{app_container::AppDBCtx, auth::entity};
 
+pub async fn insert(
+    context: &mut AppDBCtx<'_>,
+    code: &str,
+    description: Option<&str>,
+) -> tlab::Result<entity::Permission> {
+    let (id, code, description): (i64, String, Option<String>) = sqlx::query_as(
+        "INSERT INTO tlab_permission (code, description) VALUES ($1, $2) RETURNING id, code, description",
+    )
+    .bind(code)
+    .bind(description)
+    .fetch_one(context.backend())
+    .await
+    .map_err(sqlxdb::postgres::map_error)?;
+
+    Ok(entity::Permission {
+        id,
+        code,
+        description,
+    })
+}
+
 pub async fn find_page(
     context: &mut AppDBCtx<'_>,
     code: Option<&str>,

@@ -1,5 +1,19 @@
 import { api } from "../../../api";
-import type { PermissionList, PermissionListParams } from "../types";
+import type {
+	CreatePermissionInput,
+	Permission,
+	PermissionList,
+	PermissionListParams,
+} from "../types";
+
+export async function createPermission(
+	input: CreatePermissionInput,
+): Promise<Permission> {
+	const response = await api
+		.post("auth/permissions", { json: input })
+		.json<{ data: Permission }>();
+	return response.data;
+}
 
 export async function getPermissions({
 	code,

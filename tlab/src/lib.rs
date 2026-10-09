@@ -2,6 +2,7 @@ pub mod cachedb;
 pub mod cert;
 pub mod config;
 mod error;
+pub mod google_oauth2;
 pub mod hash;
 pub mod http;
 pub mod jwt;
@@ -9,7 +10,6 @@ pub mod oracledb;
 pub mod oraclersdb;
 pub mod sqlxdb;
 pub mod tracing;
-pub mod google_oauth2;
 pub use error::*;
 
 #[cfg(test)]

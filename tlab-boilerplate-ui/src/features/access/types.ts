@@ -16,3 +16,8 @@ export type PermissionList = {
 	page: number;
 	page_size: number;
 };
+
+export type CreatePermissionInput = {
+	code: string;
+	description: string | null;
+};

@@ -12,7 +12,10 @@ use crate::{
 };
 
 pub(super) fn router() -> axum::Router<Arc<AppContainer>> {
-    axum::Router::new().route("/api/v1/auth/permissions", get(list_permissions))
+    axum::Router::new().route(
+        "/api/v1/auth/permissions",
+        get(list_permissions).post(create_permission),
+    )
 }
 
 #[derive(serde::Serialize)]
@@ -20,6 +23,56 @@ struct PermissionResponse {
     id: i64,
     code: String,
     description: Option<String>,
+}
+
+impl From<crate::auth::entity::Permission> for PermissionResponse {
+    fn from(permission: crate::auth::entity::Permission) -> Self {
+        Self {
+            id: permission.id,
+            code: permission.code,
+            description: permission.description,
+        }
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct CreatePermissionRequest {
+    code: String,
+    description: Option<String>,
+}
+
+async fn create_permission(
+    State(container): State<Arc<AppContainer>>,
+    claims: AccessClaims,
+    axum::Json(request): axum::Json<CreatePermissionRequest>,
+) -> ApiResult<PermissionResponse> {
+    permission::require(&container, &claims, permission::USER_MANAGE).await?;
+
+    let code = request.code.trim();
+    if code.is_empty() || code.chars().count() > 100 {
+        return Err(ApiResponse::bad_request("invalid permission code"));
+    }
+    let description = request
+        .description
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    let mut conn = container.database.conn().await.map_err(|error| {
+        tracing::error!(?error, "Failed to connect to database");
+        ApiResponse::internal_error("failed to create permission")
+    })?;
+    let created = permission_repository::insert(&mut conn.context(), code, description)
+        .await
+        .map_err(|error| match error {
+            tlab::Error::Conflict(_) => ApiResponse::conflict("permission already exists"),
+            error => {
+                tracing::error!(?error, "Failed to create permission");
+                ApiResponse::internal_error("failed to create permission")
+            }
+        })?;
+
+    Ok(ApiResponse::created(created.into()))
 }
 
 #[derive(serde::Deserialize)]
@@ -69,11 +122,7 @@ async fn list_permissions(
     Ok(ApiResponse::data(PermissionListResponse {
         items: permissions
             .into_iter()
-            .map(|item| PermissionResponse {
-                id: item.id,
-                code: item.code,
-                description: item.description,
-            })
+            .map(PermissionResponse::from)
             .collect(),
         total,
         page,
@@ -90,6 +139,125 @@ mod tests {
     use tower::ServiceExt;
 
     use crate::test_app;
+
+    #[tokio::test]
+    async fn creates_permission_and_rejects_invalid_or_duplicate_code() {
+        let (app, container) = test_app::setup().await;
+        let login = app
+            .clone()
+            .oneshot(
+                Request::post("/api/v1/auth/login")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        serde_json::json!({ "email": "admin@localhost", "password": "passwd" })
+                            .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body: serde_json::Value =
+            serde_json::from_slice(&to_bytes(login.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        let access_token = body["data"]["access_token"].as_str().unwrap();
+        let code = format!("test:create:{}", uuid::Uuid::new_v4());
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::post("/api/v1/auth/permissions")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
+                    .body(Body::from(
+                        serde_json::json!({ "code": format!("  {code}  "), "description": "  " })
+                            .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body: serde_json::Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(body["data"]["code"], code);
+        assert!(body["data"]["description"].is_null());
+        let id = body["data"]["id"].as_i64().unwrap();
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::post("/api/v1/auth/permissions")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
+                    .body(Body::from(serde_json::json!({ "code": code }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::post("/api/v1/auth/permissions")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
+                    .body(Body::from(serde_json::json!({ "code": "   " }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::post("/api/v1/auth/permissions")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        serde_json::json!({ "code": "test:missing-auth" }).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        let token = container
+            .jwt_codec
+            .issue_pair(
+                "1",
+                Some(serde_json::json!({
+                    "role_ids": [],
+                    "session_id": uuid::Uuid::new_v4(),
+                })),
+            )
+            .unwrap();
+        let response = app
+            .oneshot(
+                Request::post("/api/v1/auth/permissions")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(
+                        header::AUTHORIZATION,
+                        format!("Bearer {}", token.access.token),
+                    )
+                    .body(Body::from(
+                        serde_json::json!({ "code": "test:forbidden" }).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+
+        let mut conn = container.database.conn().await.unwrap();
+        sqlx::query("DELETE FROM tlab_permission WHERE id = $1")
+            .bind(id)
+            .execute(conn.context().backend())
+            .await
+            .unwrap();
+    }
 
     #[tokio::test]
     async fn lists_permissions_for_admin_and_rejects_other_requests() {
@@ -117,7 +285,7 @@ mod tests {
         let response = app
             .clone()
             .oneshot(
-                Request::get("/api/v1/auth/permissions")
+                Request::get("/api/v1/auth/permissions?code=manage")
                     .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
                     .body(Body::empty())
                     .unwrap(),
@@ -148,7 +316,7 @@ mod tests {
         let response = app
             .clone()
             .oneshot(
-                Request::get("/api/v1/auth/permissions?page=2&page_size=1")
+                Request::get("/api/v1/auth/permissions?code=manage&page=2&page_size=1")
                     .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
                     .body(Body::empty())
                     .unwrap(),

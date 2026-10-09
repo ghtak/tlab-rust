@@ -1,10 +1,24 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { expect, test, vi } from "vitest";
-import { getPermissions } from "../services/api";
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react";
+import { afterEach, expect, test, vi } from "vitest";
+import { createPermission, getPermissions } from "../services/api";
 import { PermissionPage } from "./PermissionPage";
 
-vi.mock("../services/api", () => ({ getPermissions: vi.fn() }));
+vi.mock("../services/api", () => ({
+	createPermission: vi.fn(),
+	getPermissions: vi.fn(),
+}));
+
+afterEach(() => {
+	cleanup();
+	vi.clearAllMocks();
+});
 
 // 1. `fireEvent.change(...)`가 검색창에 `user:manage`를 입력합니다. 이때는 입력 상태인 `inputCode`만 바뀌고 아직 조회하지 않습니다.
 // 2. `fireEvent.click(... "검색")`이 검색 버튼을 누릅니다. 폼 제출 코드가 `code`를 `user:manage`로 바꿉니다.
@@ -54,4 +68,46 @@ test("코드 검색 시 해당 조건으로 퍼미션 목록을 다시 조회한
 	);
 	await screen.findByText("user:manage");
 	expect(screen.queryByText("role:read")).toBeNull();
+});
+
+test("퍼미션 추가 후 목록을 다시 조회한다", async () => {
+	let created = false;
+	vi.mocked(getPermissions).mockImplementation(async ({ page, pageSize }) => ({
+		items: created
+			? [{ id: 2, code: "order:read", description: "주문 조회" }]
+			: [],
+		total: created ? 1 : 0,
+		page,
+		page_size: pageSize,
+	}));
+	vi.mocked(createPermission).mockImplementation(async (input) => {
+		created = true;
+		return { id: 2, ...input };
+	});
+
+	const queryClient = new QueryClient();
+	render(
+		<QueryClientProvider client={queryClient}>
+			<PermissionPage />
+		</QueryClientProvider>,
+	);
+
+	await screen.findByText("등록된 퍼미션이 없습니다.");
+	fireEvent.click(screen.getByRole("button", { name: "퍼미션 추가" }));
+	fireEvent.change(screen.getByRole("textbox", { name: "코드 *" }), {
+		target: { value: "order:read" },
+	});
+	fireEvent.change(screen.getByRole("textbox", { name: "설명" }), {
+		target: { value: "주문 조회" },
+	});
+	fireEvent.click(screen.getByRole("button", { name: "추가" }));
+
+	await waitFor(() =>
+		expect(vi.mocked(createPermission).mock.calls[0]?.[0]).toEqual({
+			code: "order:read",
+			description: "주문 조회",
+		}),
+	);
+	await screen.findByText("order:read");
+	expect(screen.queryByRole("dialog")).toBeNull();
 });
