@@ -15,6 +15,10 @@ export async function createPermission(
 	return response.data;
 }
 
+export async function deletePermission(id: number): Promise<void> {
+	await api.delete(`auth/permissions/${id}`);
+}
+
 export async function getPermissions({
 	code,
 	page,

@@ -1,8 +1,25 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { HTTPError } from "ky";
+import { MoreHorizontalIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "../../../components/ui/alert-dialog";
 import { Button } from "../../../components/ui/button";
 import { Card, CardHeader, CardTitle } from "../../../components/ui/card";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "../../../components/ui/dropdown-menu";
 import { Input } from "../../../components/ui/input";
 import {
 	Pagination,
@@ -21,17 +38,30 @@ import {
 	TableRow,
 } from "../../../components/ui/table";
 import { CreatePermissionDialog } from "../components/CreatePermissionDialog";
+import { deletePermission } from "../services/api";
 import { permissionsQuery } from "../services/queries";
+import type { Permission } from "../types";
 
 const PAGE_SIZE = 20;
 
 export function PermissionPage() {
+	const queryClient = useQueryClient();
 	const [inputCode, setInputCode] = useState("");
 	const [code, setCode] = useState("");
 	const [page, setPage] = useState(1);
+	const [permissionToDelete, setPermissionToDelete] =
+		useState<Permission | null>(null);
 	const { data, error, isPending } = useQuery(
 		permissionsQuery({ code, page, pageSize: PAGE_SIZE }),
 	);
+	const deletion = useMutation({
+		mutationFn: deletePermission,
+		onSuccess: async () => {
+			setPermissionToDelete(null);
+			if (data?.items.length === 1 && page > 1) setPage(page - 1);
+			await queryClient.invalidateQueries({ queryKey: ["permissions"] });
+		},
+	});
 	const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE));
 	const firstVisiblePage = Math.max(1, Math.min(page - 2, totalPages - 4));
 	const visiblePages = Array.from(
@@ -106,6 +136,9 @@ export function PermissionPage() {
 							<TableRow>
 								<TableHead className="px-5 sm:px-6">코드</TableHead>
 								<TableHead className="px-5 sm:px-6">설명</TableHead>
+								<TableHead className="w-16 px-5 text-right sm:px-6">
+									작업
+								</TableHead>
 							</TableRow>
 						</TableHeader>
 						<TableBody>
@@ -116,6 +149,27 @@ export function PermissionPage() {
 									</TableCell>
 									<TableCell className="px-5 py-4 text-slate-600 sm:px-6">
 										{permission.description ?? "—"}
+									</TableCell>
+									<TableCell className="px-5 py-4 text-right sm:px-6">
+										<DropdownMenu>
+											<DropdownMenuTrigger
+												render={<Button variant="ghost" size="icon-sm" />}
+												aria-label={`${permission.code} 작업`}
+											>
+												<MoreHorizontalIcon />
+											</DropdownMenuTrigger>
+											<DropdownMenuContent align="end">
+												<DropdownMenuItem
+													variant="destructive"
+													onClick={() => {
+														deletion.reset();
+														setPermissionToDelete(permission);
+													}}
+												>
+													<Trash2Icon /> 삭제
+												</DropdownMenuItem>
+											</DropdownMenuContent>
+										</DropdownMenu>
 									</TableCell>
 								</TableRow>
 							))}
@@ -175,6 +229,41 @@ export function PermissionPage() {
 					</Pagination>
 				</div>
 			</Card>
+			<AlertDialog
+				open={permissionToDelete !== null}
+				onOpenChange={(open) => {
+					if (!open && !deletion.isPending) setPermissionToDelete(null);
+				}}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>퍼미션을 삭제할까요?</AlertDialogTitle>
+						<AlertDialogDescription>
+							{permissionToDelete?.code} 퍼미션을 삭제하면 모든 롤에서 연결이
+							제거됩니다. 이 작업은 되돌릴 수 없습니다.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					{deletion.isError && (
+						<p role="alert" className="text-sm text-destructive">
+							퍼미션을 삭제하지 못했습니다. 다시 시도해 주세요.
+						</p>
+					)}
+					<AlertDialogFooter>
+						<AlertDialogCancel disabled={deletion.isPending} autoFocus>
+							취소
+						</AlertDialogCancel>
+						<AlertDialogAction
+							variant="destructive"
+							disabled={deletion.isPending}
+							onClick={() => {
+								if (permissionToDelete) deletion.mutate(permissionToDelete.id);
+							}}
+						>
+							{deletion.isPending ? "삭제 중..." : "삭제"}
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</div>
 	);
 }

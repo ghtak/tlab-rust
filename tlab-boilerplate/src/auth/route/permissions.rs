@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     routing::get,
 };
 
@@ -12,10 +12,39 @@ use crate::{
 };
 
 pub(super) fn router() -> axum::Router<Arc<AppContainer>> {
-    axum::Router::new().route(
-        "/api/v1/auth/permissions",
-        get(list_permissions).post(create_permission),
-    )
+    axum::Router::new()
+        .route(
+            "/api/v1/auth/permissions",
+            get(list_permissions).post(create_permission),
+        )
+        .route(
+            "/api/v1/auth/permissions/{id}",
+            axum::routing::delete(delete_permission),
+        )
+}
+
+async fn delete_permission(
+    State(container): State<Arc<AppContainer>>,
+    claims: AccessClaims,
+    Path(id): Path<i64>,
+) -> ApiResult<()> {
+    permission::require(&container, &claims, permission::USER_MANAGE).await?;
+
+    let mut conn = container.database.conn().await.map_err(|error| {
+        tracing::error!(?error, "Failed to connect to database");
+        ApiResponse::internal_error("failed to delete permission")
+    })?;
+    let deleted = permission_repository::delete(&mut conn.context(), id)
+        .await
+        .map_err(|error| {
+            tracing::error!(?error, "Failed to delete permission");
+            ApiResponse::internal_error("failed to delete permission")
+        })?;
+
+    if !deleted {
+        return Err(ApiResponse::not_found("permission not found"));
+    }
+    Ok(ApiResponse::ok())
 }
 
 #[derive(serde::Serialize)]
@@ -139,6 +168,85 @@ mod tests {
     use tower::ServiceExt;
 
     use crate::test_app;
+
+    #[tokio::test]
+    async fn deletes_permission_and_its_role_links() {
+        let (app, container) = test_app::setup().await;
+        let login = app
+            .clone()
+            .oneshot(
+                Request::post("/api/v1/auth/login")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        serde_json::json!({ "email": "admin@localhost", "password": "passwd" })
+                            .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body: serde_json::Value =
+            serde_json::from_slice(&to_bytes(login.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        let access_token = body["data"]["access_token"].as_str().unwrap();
+        let mut conn = container.database.conn().await.unwrap();
+        let code = format!("test:delete:{}", uuid::Uuid::new_v4());
+        let id: i64 =
+            sqlx::query_scalar("INSERT INTO tlab_permission (code) VALUES ($1) RETURNING id")
+                .bind(code)
+                .fetch_one(conn.context().backend())
+                .await
+                .unwrap();
+        sqlx::query(
+            "INSERT INTO tlab_role_permission (role_id, permission_id) SELECT id, $1 FROM tlab_role WHERE code = 'admin'",
+        )
+        .bind(id)
+        .execute(conn.context().backend())
+        .await
+        .unwrap();
+        drop(conn);
+
+        let path = format!("/api/v1/auth/permissions/{id}");
+        let response = app
+            .clone()
+            .oneshot(Request::delete(&path).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::delete(&path)
+                    .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let mut conn = container.database.conn().await.unwrap();
+        let links: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM tlab_role_permission WHERE permission_id = $1",
+        )
+        .bind(id)
+        .fetch_one(conn.context().backend())
+        .await
+        .unwrap();
+        assert_eq!(links, 0);
+        drop(conn);
+
+        let response = app
+            .oneshot(
+                Request::delete(&path)
+                    .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
 
     #[tokio::test]
     async fn creates_permission_and_rejects_invalid_or_duplicate_code() {

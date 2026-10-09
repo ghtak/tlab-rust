@@ -7,11 +7,16 @@ import {
 	waitFor,
 } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import { createPermission, getPermissions } from "../services/api";
+import {
+	createPermission,
+	deletePermission,
+	getPermissions,
+} from "../services/api";
 import { PermissionPage } from "./PermissionPage";
 
 vi.mock("../services/api", () => ({
 	createPermission: vi.fn(),
+	deletePermission: vi.fn(),
 	getPermissions: vi.fn(),
 }));
 
@@ -110,4 +115,35 @@ test("퍼미션 추가 후 목록을 다시 조회한다", async () => {
 	);
 	await screen.findByText("order:read");
 	expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+test("행 메뉴에서 확인 후 퍼미션을 삭제하고 목록을 갱신한다", async () => {
+	let deleted = false;
+	vi.mocked(getPermissions).mockImplementation(async ({ page, pageSize }) => ({
+		items: deleted ? [] : [{ id: 7, code: "role:read", description: null }],
+		total: deleted ? 0 : 1,
+		page,
+		page_size: pageSize,
+	}));
+	vi.mocked(deletePermission).mockImplementation(async () => {
+		deleted = true;
+	});
+
+	const queryClient = new QueryClient();
+	render(
+		<QueryClientProvider client={queryClient}>
+			<PermissionPage />
+		</QueryClientProvider>,
+	);
+
+	await screen.findByText("role:read");
+	fireEvent.click(screen.getByRole("button", { name: "role:read 작업" }));
+	fireEvent.click(screen.getByRole("menuitem", { name: "삭제" }));
+	expect(screen.getByText(/모든 롤에서 연결이/)).toBeTruthy();
+	fireEvent.click(screen.getByRole("button", { name: "삭제" }));
+
+	await waitFor(() =>
+		expect(vi.mocked(deletePermission).mock.calls[0]?.[0]).toBe(7),
+	);
+	await screen.findByText("등록된 퍼미션이 없습니다.");
 });

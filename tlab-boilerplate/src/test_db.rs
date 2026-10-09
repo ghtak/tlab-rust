@@ -7,7 +7,7 @@ const DATABASE_URL: &str = "postgres://tlab-test:tlab-test@localhost:35432/tlab-
 pub fn config() -> tlab::sqlxdb::Config {
     tlab::sqlxdb::Config {
         url: DATABASE_URL.into(),
-        max_connections: 1,
+        max_connections: 4,
     }
 }
 

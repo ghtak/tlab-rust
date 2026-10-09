@@ -23,6 +23,15 @@ pub async fn insert(
     })
 }
 
+pub async fn delete(context: &mut AppDBCtx<'_>, id: i64) -> tlab::Result<bool> {
+    let result = sqlx::query("DELETE FROM tlab_permission WHERE id = $1")
+        .bind(id)
+        .execute(context.backend())
+        .await
+        .map_err(sqlxdb::postgres::map_error)?;
+    Ok(result.rows_affected() > 0)
+}
+
 pub async fn find_page(
     context: &mut AppDBCtx<'_>,
     code: Option<&str>,
