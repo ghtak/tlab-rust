@@ -34,4 +34,16 @@ RBAC는 사용자가 시스템에서 수행할 수 있는 작업을 판단한다
 
 `just migrate`는 스키마와 `admin`, `sales` 역할, `user:manage`, `file:manage` 퍼미션을 적용한다. 두 퍼미션은 `admin`에만 연결되며, `sales`에는 아직 퍼미션을 연결하지 않았다. 이어서 `just init-admin`을 실행하면 기본 관리자 계정 `admin@localhost`를 생성하고 `admin` 역할을 할당한다. 두 명령은 실행할 때마다 기본 역할·퍼미션 연결과 관리자 역할 할당을 다시 시도하므로, 이를 수동으로 해제해도 다음 실행에서 복원된다.
 
-이 문서는 권한 모델과 스키마를 설명한다. 현재 HTTP 요청의 RBAC 검사와 파일별 접근 규칙은 아직 구현되지 않았다.
+### HTTP 권한 검사
+
+인증된 요청에서 `AccessClaims`가 액세스 토큰의 `role_ids`를 읽고, `auth/permission.rs`의 `require`가 `RbacService::has_permission`을 호출한다. 이 서비스는 해당 역할들의 퍼미션 코드를 DB에서 조회해 요청한 코드를 확인한다. 권한이 없으면 HTTP 403을 반환한다.
+
+현재 사용자·역할·퍼미션 관리 API는 `user:manage`를 요구한다. 관련 라우트는 `auth/route.rs`, `auth/route/users.rs`, `auth/route/roles.rs`, `auth/route/permissions.rs`에 있다. `file:manage`는 기본 데이터에 등록되어 있지만 파일 API는 아직 없다.
+
+액세스 토큰에는 발급 시점의 역할 ID가 들어간다. 역할에 연결된 퍼미션 변경은 DB 조회에 반영되지만, 사용자의 역할 변경은 기존 액세스 토큰에 즉시 반영되지 않을 수 있다. 새 액세스 토큰을 발급할 때 역할 ID를 다시 읽는다.
+
+### 역할·퍼미션 관리
+
+관리 API에서 역할과 퍼미션을 생성·조회·삭제하고, 사용자에게 역할을, 역할에 퍼미션을 배정할 수 있다. 연결 변경은 `SetUserRolesUsecase`와 `SetRolePermissionsUsecase`가 트랜잭션 안에서 전체 목록을 교체한다. 초기 관리자 `admin@localhost`의 `admin` 역할과 `admin` 역할의 `user:manage` 퍼미션은 제거할 수 없다. `admin` 역할 자체도 삭제할 수 없다.
+
+새 기능에 RBAC를 적용할 때는 해당 작업의 퍼미션 코드를 정하고 `tlab_permission` 및 필요한 역할 연결을 등록한 뒤, 요청 처리 위치에서 `permission::require`를 호출한다. 권한 코드만으로 파일 소유권이나 공유 범위를 판단하지 않는다. 위의 리소스별 접근 규칙은 파일 기능을 구현할 때 별도로 적용한다.

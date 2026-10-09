@@ -1,194 +1,37 @@
-Welcome to your new TanStack Start app!
+# tlab-boilerplate-ui
 
-# Getting Started
+`tlab-boilerplate` API를 사용하는 React UI다. 새 화면은 기존 `src/features`와 `src/routes`의 흐름을 참고해 필요한 부분만 추가한다.
 
-To run this application:
+## 실행
 
-```bash
+```sh
 npm install
 npm run dev
 ```
 
-# Building For Production
+개발 서버는 3000 포트에서 실행하며 `/api` 요청을 `https://localhost:13000`으로 전달한다. API 서버 설정은 [`../tlab-boilerplate/config.yml`](../tlab-boilerplate/config.yml), 프록시 설정은 `vite.config.ts`에 있다.
 
-To build this application for production:
+## 새 UI 기능 연결 지점
 
-```bash
-npm run build
+1. API 타입이 필요하면 `src/features/<기능명>/types.ts`에 둔다. 기존 타입에 필드를 더해야 하면 확장 타입으로 표현한다.
+2. API 요청이 있으면 기능의 `services/api.ts`에서 `src/api.ts`의 `api` 클라이언트를 사용하고, 조회 캐시가 필요하면 `services/queries.ts`에 TanStack Query 옵션을 둔다. 기존 `src/features/access/services`가 예시다.
+3. 화면은 기능 폴더의 `pages`와 필요한 `components`에 둔다. `src/routes`에는 화면을 연결하는 파일 라우트를 추가한다. `src/routes/_app.permissions.tsx`와 `src/features/access/pages/PermissionPage.tsx`가 예시다.
+4. 앱 메뉴에 노출해야 하면 `src/features/app-shell/AppLayout.tsx`의 메뉴 항목을 추가한다. `_app` 하위 라우트는 `src/routes/_app.tsx`에서 로그인 상태를 확인한다. 화면별 권한 정책은 각 기능 요구 사항에 맞춰 정한다.
+5. 데이터 변경 후 관련 조회를 갱신해야 하면 해당 query key를 무효화한다. `src/features/access/components/CreatePermissionDialog.tsx`가 예시다.
+
+인증 흐름은 [`docs/explain/login-auth-flow.md`](docs/explain/login-auth-flow.md)를 참고한다. 백엔드 기능의 계층과 연결 지점은 [`../tlab-boilerplate/docs/feature-structure.md`](../tlab-boilerplate/docs/feature-structure.md)에 정리되어 있다.
+
+## UI 프로젝트 생성 기록
+
+현재 UI 프로젝트를 생성할 때 사용한 명령이다. 기존 프로젝트를 실행할 때 다시 실행할 필요는 없다.
+
+```sh
+npx @tanstack/cli@latest create tlab-boilerplate-ui --router-only --framework react --package-manager npm --toolchain biome --no-examples --no-git
+
+npm i @tanstack/react-query
+npm i -D @tanstack/eslint-plugin-query
+npm i ky
+npm i zod
+npm i tailwindcss @tailwindcss/vite
+npx shadcn@latest init -t vite
 ```
-
-## Styling
-
-This project uses [Tailwind CSS](https://tailwindcss.com/) for styling.
-
-### Removing Tailwind CSS
-
-If you prefer not to use Tailwind CSS:
-
-1. Remove the demo pages in `src/routes/demo/`
-2. Replace the Tailwind import in `src/styles.css` with your own styles
-3. Remove `tailwindcss()` from the plugins array in `vite.config.ts`
-4. Remove `@tailwindcss/vite` and `tailwindcss` from `package.json`
-
-## Linting & Formatting
-
-This project uses [Biome](https://biomejs.dev/) for linting and formatting. The following scripts are available:
-
-
-```bash
-npm run lint
-npm run format
-npm run check
-```
-
-
-
-## Routing
-
-This project uses [TanStack Router](https://tanstack.com/router) with file-based routing. Routes are managed as files in `src/routes`.
-
-### Adding A Route
-
-To add a new route to your application just add a new file in the `./src/routes` directory.
-
-TanStack will automatically generate the content of the route file for you.
-
-Now that you have two routes you can use a `Link` component to navigate between them.
-
-### Adding Links
-
-To use SPA (Single Page Application) navigation you will need to import the `Link` component from `@tanstack/react-router`.
-
-```tsx
-import { Link } from "@tanstack/react-router";
-```
-
-Then anywhere in your JSX you can use it like so:
-
-```tsx
-<Link to="/about">About</Link>
-```
-
-This will create a link that will navigate to the `/about` route.
-
-More information on the `Link` component can be found in the [Link documentation](https://tanstack.com/router/v1/docs/framework/react/api/router/linkComponent).
-
-### Using A Layout
-
-In the File Based Routing setup the layout is located in `src/routes/__root.tsx`. Anything you add to the root route will appear in all the routes. The route content will appear in the JSX where you render `{children}` in the `shellComponent`.
-
-Here is an example layout that includes a header:
-
-```tsx
-import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
-
-export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      { charSet: 'utf-8' },
-      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'My App' },
-    ],
-  }),
-  shellComponent: ({ children }) => (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        <header>
-          <nav>
-            <Link to="/">Home</Link>
-            <Link to="/about">About</Link>
-          </nav>
-        </header>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  ),
-})
-```
-
-More information on layouts can be found in the [Layouts documentation](https://tanstack.com/router/latest/docs/framework/react/guide/routing-concepts#layouts).
-
-## Server Functions
-
-TanStack Start provides server functions that allow you to write server-side code that seamlessly integrates with your client components.
-
-```tsx
-import { createServerFn } from '@tanstack/react-start'
-
-const getServerTime = createServerFn({
-  method: 'GET',
-}).handler(async () => {
-  return new Date().toISOString()
-})
-
-// Use in a component
-function MyComponent() {
-  const [time, setTime] = useState('')
-  
-  useEffect(() => {
-    getServerTime().then(setTime)
-  }, [])
-  
-  return <div>Server time: {time}</div>
-}
-```
-
-## API Routes
-
-You can create API routes by using the `server` property in your route definitions:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-import { json } from '@tanstack/react-start'
-
-export const Route = createFileRoute('/api/hello')({
-  server: {
-    handlers: {
-      GET: () => json({ message: 'Hello, World!' }),
-    },
-  },
-})
-```
-
-## Data Fetching
-
-There are multiple ways to fetch data in your application. You can use TanStack Query to fetch data from a server. But you can also use the `loader` functionality built into TanStack Router to load the data for a route before it's rendered.
-
-For example:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-
-export const Route = createFileRoute('/people')({
-  loader: async () => {
-    const response = await fetch('https://swapi.dev/api/people')
-    return response.json()
-  },
-  component: PeopleComponent,
-})
-
-function PeopleComponent() {
-  const data = Route.useLoaderData()
-  return (
-    <ul>
-      {data.results.map((person) => (
-        <li key={person.name}>{person.name}</li>
-      ))}
-    </ul>
-  )
-}
-```
-
-Loaders simplify your data fetching logic dramatically. Check out more information in the [Loader documentation](https://tanstack.com/router/latest/docs/framework/react/guide/data-loading#loader-parameters).
-
-
-
-# Learn More
-
-You can learn more about all of the offerings from TanStack in the [TanStack documentation](https://tanstack.com).
-
-For TanStack Start specific documentation, visit [TanStack Start](https://tanstack.com/start).

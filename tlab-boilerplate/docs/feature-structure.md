@@ -10,6 +10,18 @@
 - `repository`: 저장·조회·삭제와 DB 오류 변환을 담당한다. SQLx 쿼리 결과는 repository 안에서 entity로 변환한다. 조회한 데이터의 유효성 등 애플리케이션 규칙은 호출하는 유스케이스에서 판단한다. 호출부에서는 `repository::user_repository::...`처럼 대상 저장소가 드러나는 국소 접근 이름을 사용한다.
 - `entity`: 기능의 도메인 타입과 상태를 둔다. 값의 종류가 알려져 있고 코드에서 구분해야 한다면 문자열 대신 enum을 우선 검토한다.
 
+## 새 백엔드 기능 연결 지점
+
+새 기능에 필요한 파일만 `src/<기능명>` 아래에 둔다. `auth`의 하위 폴더 구성을 그대로 복제할 필요는 없다.
+
+1. 영속 데이터가 있으면 기능 폴더의 `migrations`에 SQL을 두고 `src/migration.rs`의 목록과 `migrate` 함수에 등록한다. 현재 마이그레이션은 등록된 SQL을 실행할 때마다 다시 실행하므로 재실행 가능한 SQL로 작성한다. 새 파일을 추가하는 것만으로는 적용되지 않는다.
+2. HTTP API가 있으면 기능의 `route`에 라우터를 만들고 `src/main.rs`의 앱 라우터에 연결한다. 요청·응답은 `src/api_response.rs`의 `ApiResponse`/`ApiResult` 형식을 참고한다.
+3. DB나 설정 등 앱 공통 자원이 필요하면 `src/app_container.rs`의 `AppContainer`를 사용한다. 새 의존성이 실제로 필요할 때만 필드를 추가한다.
+4. 인증된 요청은 `auth/access_claims.rs`의 `AccessClaims`를 사용한다. 권한 검사가 필요하면 `auth/permission.rs`의 `require`와 `auth/service/rbac_service.rs`의 흐름을 참고하고, 새 권한 코드와 부여 정책은 해당 기능의 요구 사항에 맞춰 정한다.
+5. DB 통합 테스트가 필요하면 `src/test_db.rs`와 `src/test_app.rs`를 참고한다. 변경한 동작을 보장하는 테스트만 추가한다.
+
+UI가 필요한 기능은 [`tlab-boilerplate-ui/README.md`](../../tlab-boilerplate-ui/README.md)의 연결 지점을 함께 확인한다.
+
 ## repository 인터페이스 명명 규칙
 
 repository 함수는 조회 건수와 저장 대상을 이름에 드러낸다. 조회 조건의 기준이 되는 대상을 따라 함수를 배치하고, 반환 타입만을 기준으로 다른 repository로 옮기지 않는다.
