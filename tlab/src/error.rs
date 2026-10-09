@@ -19,6 +19,9 @@ pub enum Error {
     #[error("Conflict {0}")]
     Conflict(Cow<'static, str>),
 
+    #[error("invalid operation: {0}")]
+    InvalidOperation(Cow<'static, str>),
+
     #[error("{0} not found")]
     NotFound(Cow<'static, str>),
 

@@ -76,7 +76,7 @@ pub struct Permission {
     pub description: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct Role {
     pub id: i64,
     pub code: String,

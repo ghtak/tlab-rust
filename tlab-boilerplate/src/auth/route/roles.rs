@@ -126,7 +126,7 @@ async fn set_role_permissions(
             tlab::Error::NotFound(ref resource) if resource == "permission" => {
                 ApiResponse::bad_request("permission not found")
             }
-            tlab::Error::Conflict(_) => ApiResponse::conflict("admin must retain user:manage"),
+            tlab::Error::InvalidOperation(message) => ApiResponse::bad_request(message),
             error => {
                 tracing::error!(?error, "Failed to set role permissions");
                 ApiResponse::internal_error("failed to set role permissions")
@@ -385,7 +385,11 @@ mod tests {
             .oneshot(patch(admin_id, vec![], vec![user_manage_id]))
             .await
             .unwrap();
-        assert_eq!(response.status(), StatusCode::CONFLICT);
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body: serde_json::Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(body["error"], "admin must retain user:manage");
         let response = app
             .clone()
             .oneshot(patch(role_id, vec![user_manage_id], vec![user_manage_id]))

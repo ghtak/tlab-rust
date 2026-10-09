@@ -26,6 +26,9 @@ export type Role = {
 	id: number;
 	code: string;
 	description: string | null;
+};
+
+export type RoleWithPermissionCount = Role & {
 	permission_count: number;
 };
 
@@ -36,7 +39,7 @@ export type RoleListParams = {
 };
 
 export type RoleList = {
-	items: Role[];
+	items: RoleWithPermissionCount[];
 	total: number;
 	page: number;
 	page_size: number;
@@ -48,7 +51,7 @@ export type CreateRoleInput = {
 };
 
 export type RolePermissions = {
-	role: Role;
+	role: RoleWithPermissionCount;
 	permission_ids: number[];
 	linked_permissions: Permission[];
 };
@@ -82,4 +85,15 @@ export type UserList = {
 	total: number;
 	page: number;
 	page_size: number;
+};
+
+export type UserRoles = {
+	user: Pick<User, "id" | "name" | "email" | "status">;
+	roles: Role[];
+};
+
+export type ChangeUserRolesInput = {
+	userId: number;
+	add_ids: number[];
+	remove_ids: number[];
 };

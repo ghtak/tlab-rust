@@ -14,9 +14,9 @@
 
 - `src/auth/route.rs`: 요청·응답 DTO와 유스케이스 호출, HTTP 오류 매핑. 현재 `/me`는 `user:manage` 권한을 검사한 뒤 JWT claims를 반환한다.
 - `src/auth/usecase/create_managed_user.rs`: 명시적 타입 이름과 트랜잭션 안에서 여러 저장 작업 조합
-- `src/auth/repository/user_repository.rs`: SQLx 쿼리와 결과 → entity 변환
+- `src/auth/repository/user_repository.rs`: 사용자 데이터와 연결된 역할 조회·변경, SQLx 결과 → entity 변환
 - `src/auth/repository/refresh_token_repository.rs`: 로그인 세션별 refresh token 해시 저장·조회·삭제
-- `src/auth/repository/rbac_repository.rs`: 역할 ID와 퍼미션 코드 조회
+- `src/auth/repository/role_repository.rs`: 역할과 연결된 퍼미션 조회·변경
 - `src/auth/access_claims.rs`, `src/auth/permission.rs`: JWT 추출과 HTTP 권한 검사. 다른 기능에서도 인증이 필요할 때 재사용한다.
 - `src/auth/entity.rs`: `UserAccount`, `UserIdentity`, `UserCredential` 및 상태·제공자 타입
 

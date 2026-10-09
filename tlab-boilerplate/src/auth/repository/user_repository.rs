@@ -109,6 +109,73 @@ pub async fn find_user_accounts(
     })
 }
 
+pub async fn find_roles_by_user_account_id(
+    context: &mut AppDBCtx<'_>,
+    user_account_id: i64,
+) -> tlab::Result<Vec<entity::Role>> {
+    let rows: Vec<(i64, String, Option<String>)> = sqlx::query_as(
+        "SELECT role.id, role.code, role.description FROM tlab_user_role AS link \
+         JOIN tlab_role AS role ON role.id = link.role_id \
+         WHERE link.user_account_id = $1 ORDER BY role.code",
+    )
+    .bind(user_account_id)
+    .fetch_all(context.backend())
+    .await
+    .map_err(sqlxdb::postgres::map_error)?;
+    Ok(rows
+        .into_iter()
+        .map(|(id, code, description)| entity::Role {
+            id,
+            code,
+            description,
+        })
+        .collect())
+}
+
+pub async fn find_role_ids_by_user_account_id(
+    context: &mut AppDBCtx<'_>,
+    user_account_id: i64,
+) -> tlab::Result<Vec<i64>> {
+    sqlx::query_scalar(
+        "SELECT role_id FROM tlab_user_role WHERE user_account_id = $1 ORDER BY role_id",
+    )
+    .bind(user_account_id)
+    .fetch_all(context.backend())
+    .await
+    .map_err(sqlxdb::postgres::map_error)
+}
+
+pub async fn add_roles(
+    context: &mut AppDBCtx<'_>,
+    user_account_id: i64,
+    role_ids: &[i64],
+) -> tlab::Result<()> {
+    sqlx::query(
+        "INSERT INTO tlab_user_role (user_account_id, role_id) \
+         SELECT $1, id FROM UNNEST($2::BIGINT[]) AS role_id(id) ON CONFLICT DO NOTHING",
+    )
+    .bind(user_account_id)
+    .bind(role_ids)
+    .execute(context.backend())
+    .await
+    .map_err(sqlxdb::postgres::map_error)?;
+    Ok(())
+}
+
+pub async fn remove_roles(
+    context: &mut AppDBCtx<'_>,
+    user_account_id: i64,
+    role_ids: &[i64],
+) -> tlab::Result<()> {
+    sqlx::query("DELETE FROM tlab_user_role WHERE user_account_id = $1 AND role_id = ANY($2)")
+        .bind(user_account_id)
+        .bind(role_ids)
+        .execute(context.backend())
+        .await
+        .map_err(sqlxdb::postgres::map_error)?;
+    Ok(())
+}
+
 #[derive(sqlx::FromRow)]
 struct UserIdentityRow {
     id: i64,
@@ -292,6 +359,22 @@ pub async fn find_user_account(
     row.map(UserAccountRow::into_entity).transpose()
 }
 
+pub async fn find_user_account_for_update(
+    context: &mut AppDBCtx<'_>,
+    user_account_id: i64,
+) -> tlab::Result<Option<entity::UserAccount>> {
+    let row = sqlx::query_as::<_, UserAccountRow>(
+        r#"SELECT id, name, email, status, created_at, updated_at, create_by, update_by
+           FROM tlab_user_account WHERE id = $1 FOR UPDATE"#,
+    )
+    .bind(user_account_id)
+    .fetch_optional(context.backend())
+    .await
+    .map_err(sqlxdb::postgres::map_error)?;
+
+    row.map(UserAccountRow::into_entity).transpose()
+}
+
 pub async fn find_managed_login_user(
     context: &mut AppDBCtx<'_>,
     email: &str,
@@ -461,6 +544,58 @@ pub async fn delete_user_credential(
 mod tests {
     use super::*;
     use crate::test_db;
+
+    #[tokio::test]
+    async fn finds_assigned_roles() {
+        let database = test_db::connect().await;
+        let mut tx = database.tx().await.unwrap();
+        let user_id: i64 = sqlx::query_scalar(
+            "INSERT INTO tlab_user_account (name, email) VALUES ('Alice', $1) RETURNING id",
+        )
+        .bind(test_db::unique_email("rbac"))
+        .fetch_one(tx.context().backend())
+        .await
+        .unwrap();
+        let admin_role_id: i64 =
+            sqlx::query_scalar("SELECT id FROM tlab_role WHERE code = 'admin'")
+                .fetch_one(tx.context().backend())
+                .await
+                .unwrap();
+        let sales_role_id: i64 =
+            sqlx::query_scalar("SELECT id FROM tlab_role WHERE code = 'sales'")
+                .fetch_one(tx.context().backend())
+                .await
+                .unwrap();
+
+        add_roles(&mut tx.context(), user_id, &[admin_role_id, sales_role_id])
+            .await
+            .unwrap();
+        assert_eq!(
+            find_role_ids_by_user_account_id(&mut tx.context(), user_id)
+                .await
+                .unwrap(),
+            [admin_role_id, sales_role_id]
+        );
+        assert_eq!(
+            find_roles_by_user_account_id(&mut tx.context(), user_id)
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|role| role.code)
+                .collect::<Vec<_>>(),
+            ["admin", "sales"]
+        );
+        remove_roles(&mut tx.context(), user_id, &[sales_role_id])
+            .await
+            .unwrap();
+        assert_eq!(
+            find_role_ids_by_user_account_id(&mut tx.context(), user_id)
+                .await
+                .unwrap(),
+            [admin_role_id]
+        );
+        tx.rollback().await.unwrap();
+    }
 
     #[tokio::test]
     async fn runs_user_repository_cud_with_postgres() {

@@ -16,7 +16,9 @@ import { Route as AppPermissionsRouteImport } from './routes/_app.permissions'
 import { Route as AppRolesRouteImport } from './routes/_app.roles'
 import { Route as AppUsersRouteImport } from './routes/_app.users'
 import { Route as AppRolesIndexRouteImport } from './routes/_app.roles.index'
+import { Route as AppUsersIndexRouteImport } from './routes/_app.users.index'
 import { Route as AppRolesRoleIdPermissionsRouteImport } from './routes/_app.roles.$roleId.permissions'
+import { Route as AppUsersUserIdRolesRouteImport } from './routes/_app.users.$userId.roles'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -52,29 +54,42 @@ const AppRolesIndexRoute = AppRolesIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRolesRoute,
 } as any)
+const AppUsersIndexRoute = AppUsersIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppUsersRoute,
+} as any)
 const AppRolesRoleIdPermissionsRoute =
   AppRolesRoleIdPermissionsRouteImport.update({
     id: '/$roleId/permissions',
     path: '/$roleId/permissions',
     getParentRoute: () => AppRolesRoute,
   } as any)
+const AppUsersUserIdRolesRoute = AppUsersUserIdRolesRouteImport.update({
+  id: '/$userId/roles',
+  path: '/$userId/roles',
+  getParentRoute: () => AppUsersRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
   '/permissions': typeof AppPermissionsRoute
   '/roles': typeof AppRolesRouteWithChildren
-  '/users': typeof AppUsersRoute
+  '/users': typeof AppUsersRouteWithChildren
   '/roles/': typeof AppRolesIndexRoute
+  '/users/': typeof AppUsersIndexRoute
   '/roles/$roleId/permissions': typeof AppRolesRoleIdPermissionsRoute
+  '/users/$userId/roles': typeof AppUsersUserIdRolesRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/permissions': typeof AppPermissionsRoute
-  '/users': typeof AppUsersRoute
   '/': typeof AppIndexRoute
   '/roles': typeof AppRolesIndexRoute
+  '/users': typeof AppUsersIndexRoute
   '/roles/$roleId/permissions': typeof AppRolesRoleIdPermissionsRoute
+  '/users/$userId/roles': typeof AppUsersUserIdRolesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -82,10 +97,12 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_app/permissions': typeof AppPermissionsRoute
   '/_app/roles': typeof AppRolesRouteWithChildren
-  '/_app/users': typeof AppUsersRoute
+  '/_app/users': typeof AppUsersRouteWithChildren
   '/_app/': typeof AppIndexRoute
   '/_app/roles/': typeof AppRolesIndexRoute
+  '/_app/users/': typeof AppUsersIndexRoute
   '/_app/roles/$roleId/permissions': typeof AppRolesRoleIdPermissionsRoute
+  '/_app/users/$userId/roles': typeof AppUsersUserIdRolesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -96,15 +113,18 @@ export interface FileRouteTypes {
     | '/roles'
     | '/users'
     | '/roles/'
+    | '/users/'
     | '/roles/$roleId/permissions'
+    | '/users/$userId/roles'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
     | '/permissions'
-    | '/users'
     | '/'
     | '/roles'
+    | '/users'
     | '/roles/$roleId/permissions'
+    | '/users/$userId/roles'
   id:
     | '__root__'
     | '/_app'
@@ -114,7 +134,9 @@ export interface FileRouteTypes {
     | '/_app/users'
     | '/_app/'
     | '/_app/roles/'
+    | '/_app/users/'
     | '/_app/roles/$roleId/permissions'
+    | '/_app/users/$userId/roles'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -173,12 +195,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRolesIndexRouteImport
       parentRoute: typeof AppRolesRoute
     }
+    '/_app/users/': {
+      id: '/_app/users/'
+      path: '/'
+      fullPath: '/users/'
+      preLoaderRoute: typeof AppUsersIndexRouteImport
+      parentRoute: typeof AppUsersRoute
+    }
     '/_app/roles/$roleId/permissions': {
       id: '/_app/roles/$roleId/permissions'
       path: '/$roleId/permissions'
       fullPath: '/roles/$roleId/permissions'
       preLoaderRoute: typeof AppRolesRoleIdPermissionsRouteImport
       parentRoute: typeof AppRolesRoute
+    }
+    '/_app/users/$userId/roles': {
+      id: '/_app/users/$userId/roles'
+      path: '/$userId/roles'
+      fullPath: '/users/$userId/roles'
+      preLoaderRoute: typeof AppUsersUserIdRolesRouteImport
+      parentRoute: typeof AppUsersRoute
     }
   }
 }
@@ -197,17 +233,31 @@ const AppRolesRouteWithChildren = AppRolesRoute._addFileChildren(
   AppRolesRouteChildren,
 )
 
+interface AppUsersRouteChildren {
+  AppUsersIndexRoute: typeof AppUsersIndexRoute
+  AppUsersUserIdRolesRoute: typeof AppUsersUserIdRolesRoute
+}
+
+const AppUsersRouteChildren: AppUsersRouteChildren = {
+  AppUsersIndexRoute: AppUsersIndexRoute,
+  AppUsersUserIdRolesRoute: AppUsersUserIdRolesRoute,
+}
+
+const AppUsersRouteWithChildren = AppUsersRoute._addFileChildren(
+  AppUsersRouteChildren,
+)
+
 interface AppRouteChildren {
   AppPermissionsRoute: typeof AppPermissionsRoute
   AppRolesRoute: typeof AppRolesRouteWithChildren
-  AppUsersRoute: typeof AppUsersRoute
+  AppUsersRoute: typeof AppUsersRouteWithChildren
   AppIndexRoute: typeof AppIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppPermissionsRoute: AppPermissionsRoute,
   AppRolesRoute: AppRolesRouteWithChildren,
-  AppUsersRoute: AppUsersRoute,
+  AppUsersRoute: AppUsersRouteWithChildren,
   AppIndexRoute: AppIndexRoute,
 }
 

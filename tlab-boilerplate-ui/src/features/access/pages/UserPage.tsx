@@ -1,6 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { HTTPError } from "ky";
-import { ChevronDownIcon } from "lucide-react";
+import {
+	ChevronDownIcon,
+	KeyRoundIcon,
+	MoreHorizontalIcon,
+} from "lucide-react";
 import { useState } from "react";
 import { Button } from "../../../components/ui/button";
 import { Card, CardHeader, CardTitle } from "../../../components/ui/card";
@@ -39,6 +44,7 @@ const statusLabels: Record<UserStatus, string> = {
 };
 
 export function UserPage() {
+	const navigate = useNavigate();
 	const [inputQ, setInputQ] = useState("");
 	const [q, setQ] = useState("");
 	const [status, setStatus] = useState<UserStatus | "">("");
@@ -159,6 +165,9 @@ export function UserPage() {
 									<TableHead className="px-5 sm:px-6">상태</TableHead>
 									<TableHead className="px-5 sm:px-6">롤</TableHead>
 									<TableHead className="px-5 sm:px-6">로그인 수단</TableHead>
+									<TableHead className="w-16 px-5 text-right sm:px-6">
+										작업
+									</TableHead>
 								</TableRow>
 							</TableHeader>
 							<TableBody>
@@ -180,6 +189,28 @@ export function UserPage() {
 											{user.providers.length > 0
 												? user.providers.join(", ")
 												: "—"}
+										</TableCell>
+										<TableCell className="px-5 py-4 text-right sm:px-6">
+											<DropdownMenu>
+												<DropdownMenuTrigger
+													render={<Button variant="ghost" size="icon-sm" />}
+													aria-label={`${user.email} 작업`}
+												>
+													<MoreHorizontalIcon />
+												</DropdownMenuTrigger>
+												<DropdownMenuContent align="end">
+													<DropdownMenuItem
+														onClick={() =>
+															void navigate({
+																to: "/users/$userId/roles",
+																params: { userId: String(user.id) },
+															})
+														}
+													>
+														<KeyRoundIcon /> 롤 관리
+													</DropdownMenuItem>
+												</DropdownMenuContent>
+											</DropdownMenu>
 										</TableCell>
 									</TableRow>
 								))}

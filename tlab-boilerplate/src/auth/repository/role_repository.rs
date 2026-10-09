@@ -104,6 +104,27 @@ pub async fn find_by_id_for_update(
     }))
 }
 
+pub async fn find_by_ids_for_update(
+    context: &mut AppDBCtx<'_>,
+    ids: &[i64],
+) -> tlab::Result<Vec<entity::Role>> {
+    let rows: Vec<(i64, String, Option<String>)> = sqlx::query_as(
+        "SELECT id, code, description FROM tlab_role WHERE id = ANY($1) FOR KEY SHARE",
+    )
+    .bind(ids)
+    .fetch_all(context.backend())
+    .await
+    .map_err(sqlxdb::postgres::map_error)?;
+    Ok(rows
+        .into_iter()
+        .map(|(id, code, description)| entity::Role {
+            id,
+            code,
+            description,
+        })
+        .collect())
+}
+
 pub async fn find_permissions(
     context: &mut AppDBCtx<'_>,
     role_id: i64,
@@ -126,6 +147,21 @@ pub async fn find_permissions(
             description,
         })
         .collect())
+}
+
+pub async fn find_permission_codes_by_role_ids(
+    context: &mut AppDBCtx<'_>,
+    role_ids: &[i64],
+) -> tlab::Result<Vec<String>> {
+    sqlx::query_scalar(
+        "SELECT DISTINCT permission.code FROM tlab_role_permission AS role_permission \
+         JOIN tlab_permission AS permission ON permission.id = role_permission.permission_id \
+         WHERE role_permission.role_id = ANY($1) ORDER BY permission.code",
+    )
+    .bind(role_ids)
+    .fetch_all(context.backend())
+    .await
+    .map_err(sqlxdb::postgres::map_error)
 }
 
 pub async fn add_permissions(
@@ -189,4 +225,48 @@ pub async fn delete(context: &mut AppDBCtx<'_>, id: i64) -> tlab::Result<DeleteR
     } else {
         DeleteRoleResult::NotFound
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_db;
+
+    #[tokio::test]
+    async fn finds_permission_codes_for_roles() {
+        let database = test_db::connect().await;
+        let mut tx = database.tx().await.unwrap();
+        let suffix = uuid::Uuid::new_v4().simple().to_string();
+        let role = insert(&mut tx.context(), &format!("test-role-{suffix}"), None)
+            .await
+            .unwrap();
+        let code = format!("test:permission:{suffix}");
+        let permission_id: i64 =
+            sqlx::query_scalar("INSERT INTO tlab_permission (code) VALUES ($1) RETURNING id")
+                .bind(&code)
+                .fetch_one(tx.context().backend())
+                .await
+                .unwrap();
+        sqlx::query("INSERT INTO tlab_role_permission (role_id, permission_id) VALUES ($1, $2)")
+            .bind(role.id)
+            .bind(permission_id)
+            .execute(tx.context().backend())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            find_permission_codes_by_role_ids(&mut tx.context(), &[role.id])
+                .await
+                .unwrap(),
+            [code]
+        );
+        assert!(
+            find_permission_codes_by_role_ids(&mut tx.context(), &[])
+                .await
+                .unwrap()
+                .is_empty()
+        );
+
+        tx.rollback().await.unwrap();
+    }
 }

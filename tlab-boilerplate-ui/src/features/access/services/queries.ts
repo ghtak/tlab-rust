@@ -4,7 +4,13 @@ import type {
 	RoleListParams,
 	UserListParams,
 } from "../types";
-import { getPermissions, getRolePermissions, getRoles, getUsers } from "./api";
+import {
+	getPermissions,
+	getRolePermissions,
+	getRoles,
+	getUserRoles,
+	getUsers,
+} from "./api";
 
 export function permissionsQuery(params: PermissionListParams) {
 	return queryOptions({
@@ -34,6 +40,14 @@ export function usersQuery(params: UserListParams) {
 	return queryOptions({
 		queryKey: ["users", params],
 		queryFn: () => getUsers(params),
+		retry: false,
+	});
+}
+
+export function userRolesQuery(userId: number) {
+	return queryOptions({
+		queryKey: ["userRoles", userId],
+		queryFn: () => getUserRoles(userId),
 		retry: false,
 	});
 }

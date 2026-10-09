@@ -14,36 +14,34 @@ import {
 	PaginationNext,
 	PaginationPrevious,
 } from "../../../components/ui/pagination";
-import { changeRolePermissions } from "../services/api";
-import { permissionsQuery, rolePermissionsQuery } from "../services/queries";
-import type { Permission, RolePermissions } from "../types";
+import { changeUserRoles } from "../services/api";
+import { rolesQuery, userRolesQuery } from "../services/queries";
+import type { Role, UserRoles } from "../types";
 
 const PAGE_SIZE = 20;
 
-export function RolePermissionPage({ roleId }: { roleId: number }) {
-	const validRoleId = Number.isSafeInteger(roleId) && roleId > 0;
+export function UserRolePage({ userId }: { userId: number }) {
+	const validUserId = Number.isSafeInteger(userId) && userId > 0;
 	const { data, error, isPending } = useQuery({
-		...rolePermissionsQuery(roleId),
-		enabled: validRoleId,
+		...userRolesQuery(userId),
+		enabled: validUserId,
 	});
 
-	if (!validRoleId) {
-		return <p role="alert">잘못된 롤 주소입니다.</p>;
-	}
-	if (isPending) return <p>롤의 퍼미션을 불러오는 중입니다.</p>;
+	if (!validUserId) return <p role="alert">잘못된 사용자 주소입니다.</p>;
+	if (isPending) return <p>사용자의 롤을 불러오는 중입니다.</p>;
 	if (error) {
 		return (
 			<p role="alert">
 				{error instanceof HTTPError && error.response.status === 404
-					? "롤을 찾을 수 없습니다."
-					: "롤의 퍼미션을 불러오지 못했습니다."}
+					? "사용자를 찾을 수 없습니다."
+					: "사용자의 롤을 불러오지 못했습니다."}
 			</p>
 		);
 	}
-	return <RolePermissionEditor key={roleId} initial={data} />;
+	return <UserRoleEditor key={userId} initial={data} />;
 }
 
-function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
+function UserRoleEditor({ initial }: { initial: UserRoles }) {
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
 	const [inputCode, setInputCode] = useState("");
@@ -51,51 +49,42 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 	const [page, setPage] = useState(1);
 	const [filter, setFilter] = useState<"all" | "linked">("all");
 	const [selected, setSelected] = useState(
-		() => new Set(initial.permission_ids),
+		() => new Set(initial.roles.map((role) => role.id)),
 	);
 	const [known, setKnown] = useState(
-		() =>
-			new Map(
-				initial.linked_permissions.map((permission) => [
-					permission.id,
-					permission,
-				]),
-			),
+		() => new Map(initial.roles.map((role) => [role.id, role])),
 	);
 	const catalog = useQuery({
-		...permissionsQuery({ code, page, pageSize: PAGE_SIZE }),
+		...rolesQuery({ code, page, pageSize: PAGE_SIZE }),
 		enabled: filter === "all",
 	});
 	useEffect(() => {
 		if (!catalog.data) return;
 		setKnown((current) => {
 			const next = new Map(current);
-			for (const permission of catalog.data.items)
-				next.set(permission.id, permission);
+			for (const role of catalog.data.items) next.set(role.id, role);
 			return next;
 		});
 	}, [catalog.data]);
-	const saved = new Set(initial.permission_ids);
+	const saved = new Set(initial.roles.map((role) => role.id));
 	const addIds = [...selected].filter((id) => !saved.has(id));
 	const removeIds = [...saved].filter((id) => !selected.has(id));
 	const save = useMutation({
-		mutationFn: changeRolePermissions,
+		mutationFn: changeUserRoles,
 		onSuccess: async () => {
 			await Promise.all([
-				queryClient.invalidateQueries({ queryKey: ["roles"] }),
+				queryClient.invalidateQueries({ queryKey: ["users"] }),
 				queryClient.invalidateQueries({
-					queryKey: ["rolePermissions", initial.role.id],
+					queryKey: ["userRoles", initial.user.id],
 				}),
 			]);
-			void navigate({ to: "/roles" });
+			void navigate({ to: "/users" });
 		},
 	});
 	const linkedItems = [...selected]
 		.map((id) => known.get(id))
-		.filter((permission): permission is Permission => Boolean(permission))
-		.filter((permission) =>
-			permission.code.toLowerCase().includes(code.toLowerCase()),
-		)
+		.filter((role): role is Role => Boolean(role))
+		.filter((role) => role.code.toLowerCase().includes(code.toLowerCase()))
 		.sort((a, b) => a.code.localeCompare(b.code));
 	const items = filter === "linked" ? linkedItems : (catalog.data?.items ?? []);
 	const totalPages = Math.max(
@@ -108,22 +97,22 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 			<div>
 				<p className="mb-2 text-sm text-slate-500">
 					접근 관리 /{" "}
-					<Link to="/roles" className="hover:underline">
-						롤
+					<Link to="/users" className="hover:underline">
+						사용자
 					</Link>{" "}
-					/ {initial.role.code} / 퍼미션 관리
+					/ {initial.user.name} / 롤 관리
 				</p>
 				<h1 className="text-3xl font-semibold tracking-tight">
-					{initial.role.code} 퍼미션 관리
+					{initial.user.name} 롤 관리
 				</h1>
 				<p className="mt-1 text-sm text-slate-500">
-					현재 {selected.size}개 퍼미션이 연결됩니다.
+					{initial.user.email} · 현재 {selected.size}개 롤이 연결되었습니다.
 				</p>
 			</div>
 			<Card className="gap-0 bg-white py-0 shadow-sm">
-				<CardHeader className="flex flex-col gap-3 border-b border-slate-100 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+				<CardHeader className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 py-4 sm:px-6">
 					<div className="flex items-center gap-3">
-						<CardTitle>퍼미션 선택</CardTitle>
+						<CardTitle>롤 선택</CardTitle>
 						<Button
 							variant={filter === "all" ? "secondary" : "ghost"}
 							size="sm"
@@ -142,18 +131,18 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 						</Button>
 					</div>
 					<form
-						className="flex w-full gap-2 sm:w-80"
+						className="ml-auto flex w-full gap-2 sm:w-80"
 						onSubmit={(event) => {
 							event.preventDefault();
 							setCode(inputCode.trim());
 							setPage(1);
 						}}
 					>
-						<label htmlFor="role-permission-code" className="sr-only">
-							퍼미션 코드 검색
+						<label htmlFor="user-role-code" className="sr-only">
+							롤 코드 검색
 						</label>
 						<Input
-							id="role-permission-code"
+							id="user-role-code"
 							type="search"
 							placeholder="코드 검색"
 							value={inputCode}
@@ -164,53 +153,53 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 				</CardHeader>
 				{filter === "all" && catalog.isPending ? (
 					<output className="block px-5 py-12 text-center text-sm text-slate-500">
-						퍼미션을 불러오는 중입니다.
+						롤을 불러오는 중입니다.
 					</output>
 				) : filter === "all" && catalog.error ? (
 					<p
 						role="alert"
 						className="px-5 py-12 text-center text-sm text-destructive"
 					>
-						퍼미션 목록을 불러오지 못했습니다.
+						롤 목록을 불러오지 못했습니다.
 					</p>
 				) : items.length === 0 ? (
 					<p className="px-5 py-12 text-center text-sm text-slate-500">
-						표시할 퍼미션이 없습니다.
+						표시할 롤이 없습니다.
 					</p>
 				) : (
 					<div className="divide-y divide-slate-100">
-						{items.map((permission) => {
-							const protectedPermission =
-								initial.role.code === "admin" &&
-								permission.code === "user:manage" &&
-								saved.has(permission.id);
+						{items.map((role) => {
+							const protectedRole =
+								initial.user.email === "admin@localhost" &&
+								role.code === "admin" &&
+								saved.has(role.id);
 							return (
 								<div
-									key={permission.id}
+									key={role.id}
 									className="flex items-center gap-3 px-5 py-3 sm:px-6"
 								>
 									<Checkbox
-										id={`role-permission-${permission.id}`}
-										checked={selected.has(permission.id)}
-										disabled={protectedPermission || save.isPending}
+										id={`user-role-${role.id}`}
+										checked={selected.has(role.id)}
+										disabled={protectedRole || save.isPending}
 										onCheckedChange={(checked) => {
 											setSelected((current) => {
 												const next = new Set(current);
-												if (checked) next.add(permission.id);
-												else next.delete(permission.id);
+												if (checked) next.add(role.id);
+												else next.delete(role.id);
 												return next;
 											});
 										}}
 									/>
 									<label
-										htmlFor={`role-permission-${permission.id}`}
+										htmlFor={`user-role-${role.id}`}
 										className="min-w-0 flex-1 cursor-pointer"
 									>
-										<span className="block font-medium">{permission.code}</span>
+										<span className="block font-medium">{role.code}</span>
 										<span className="block text-sm text-slate-500">
-											{protectedPermission
-												? "기본 관리자 롤에서 해제할 수 없습니다."
-												: (permission.description ?? "설명 없음")}
+											{protectedRole
+												? "초기 관리자 계정에서 해제할 수 없습니다."
+												: (role.description ?? "설명 없음")}
 										</span>
 									</label>
 								</div>
@@ -274,7 +263,7 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 					<Button
 						variant="outline"
 						disabled={save.isPending}
-						onClick={() => void navigate({ to: "/roles" })}
+						onClick={() => void navigate({ to: "/users" })}
 					>
 						취소
 					</Button>
@@ -284,7 +273,7 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 						}
 						onClick={() =>
 							save.mutate({
-								roleId: initial.role.id,
+								userId: initial.user.id,
 								add_ids: addIds,
 								remove_ids: removeIds,
 							})
@@ -297,8 +286,8 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 			{save.isError && (
 				<p role="alert" className="text-sm text-destructive">
 					{save.error instanceof HTTPError && save.error.response.status === 400
-						? "선택한 퍼미션과 변경 내용을 확인해 주세요."
-						: "변경사항을 저장하지 못했습니다. 다시 시도해 주세요."}
+						? "선택한 롤과 변경 내용을 확인해 주세요."
+						: "변경 사항을 저장하지 못했습니다. 다시 시도해 주세요."}
 				</p>
 			)}
 		</div>

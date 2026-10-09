@@ -1,14 +1,32 @@
 use crate::{
     app_container::AppDBCtx,
     auth::{
-        entity::{Permission, Role},
-        repository::rbac_repository,
+        entity::{Permission, Role, UserAccount},
+        repository::role_repository,
     },
 };
 
 pub struct RbacService;
 
 impl RbacService {
+    pub fn validate_user_role_change(
+        &self,
+        user: &UserAccount,
+        roles: &[Role],
+        remove_ids: &[i64],
+    ) -> tlab::Result<()> {
+        if user.email == "admin@localhost"
+            && roles
+                .iter()
+                .any(|role| role.code == "admin" && remove_ids.contains(&role.id))
+        {
+            return Err(tlab::Error::InvalidOperation(
+                "initial admin must retain admin role".into(),
+            ));
+        }
+        Ok(())
+    }
+
     pub fn validate_role_permission_change(
         &self,
         role: &Role,
@@ -20,7 +38,7 @@ impl RbacService {
                 permission.code == "user:manage" && remove_ids.contains(&permission.id)
             })
         {
-            return Err(tlab::Error::Conflict(
+            return Err(tlab::Error::InvalidOperation(
                 "admin must retain user:manage".into(),
             ));
         }
@@ -38,7 +56,7 @@ impl RbacService {
         }
 
         let permission_codes =
-            rbac_repository::find_permission_codes_by_role_ids(context, role_ids).await?;
+            role_repository::find_permission_codes_by_role_ids(context, role_ids).await?;
         Ok(permission_codes.iter().any(|code| code == permission_code))
     }
 }

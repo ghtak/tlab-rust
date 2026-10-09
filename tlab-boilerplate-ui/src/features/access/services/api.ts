@@ -1,17 +1,19 @@
 import { api } from "../../../api";
 import type {
 	ChangeRolePermissionsInput,
+	ChangeUserRolesInput,
 	CreatePermissionInput,
 	CreateRoleInput,
 	Permission,
 	PermissionList,
 	PermissionListParams,
-	Role,
 	RoleList,
 	RoleListParams,
 	RolePermissions,
+	RoleWithPermissionCount,
 	UserList,
 	UserListParams,
+	UserRoles,
 } from "../types";
 
 export async function createPermission(
@@ -44,10 +46,12 @@ export async function getPermissions({
 	return response.data;
 }
 
-export async function createRole(input: CreateRoleInput): Promise<Role> {
+export async function createRole(
+	input: CreateRoleInput,
+): Promise<RoleWithPermissionCount> {
 	const response = await api
 		.post("auth/roles", { json: input })
-		.json<{ data: Role }>();
+		.json<{ data: RoleWithPermissionCount }>();
 	return response.data;
 }
 
@@ -108,4 +112,21 @@ export async function getUsers({
 		})
 		.json<{ data: UserList }>();
 	return response.data;
+}
+
+export async function getUserRoles(userId: number): Promise<UserRoles> {
+	const response = await api
+		.get(`auth/users/${userId}/roles`)
+		.json<{ data: UserRoles }>();
+	return response.data;
+}
+
+export async function changeUserRoles({
+	userId,
+	add_ids,
+	remove_ids,
+}: ChangeUserRolesInput): Promise<void> {
+	await api.patch(`auth/users/${userId}/roles`, {
+		json: { add_ids, remove_ids },
+	});
 }

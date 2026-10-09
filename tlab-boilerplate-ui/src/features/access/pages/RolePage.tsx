@@ -41,7 +41,7 @@ import {
 import { CreateRoleDialog } from "../components/CreateRoleDialog";
 import { deleteRole } from "../services/api";
 import { rolesQuery } from "../services/queries";
-import type { Role } from "../types";
+import type { RoleWithPermissionCount } from "../types";
 
 const PAGE_SIZE = 20;
 
@@ -51,7 +51,8 @@ export function RolePage() {
 	const [inputCode, setInputCode] = useState("");
 	const [code, setCode] = useState("");
 	const [page, setPage] = useState(1);
-	const [roleToDelete, setRoleToDelete] = useState<Role | null>(null);
+	const [roleToDelete, setRoleToDelete] =
+		useState<RoleWithPermissionCount | null>(null);
 	const { data, error, isPending } = useQuery(
 		rolesQuery({ code, page, pageSize: PAGE_SIZE }),
 	);
