@@ -340,11 +340,13 @@ mod tests {
         let (app, container) = test_app::setup().await;
         let mut conn = container.database.conn().await.unwrap();
         let email = crate::test_db::unique_email("me");
-        let user = user_repository::create_user_account(
+        let user = user_repository::save_user_account(
             &mut conn.context(),
-            "Regular User",
-            &email,
-            crate::auth::entity::UserStatus::Active,
+            &crate::auth::entity::UserAccount::new(
+                "Regular User".into(),
+                email.clone(),
+                crate::auth::entity::UserStatus::Active,
+            ),
         )
         .await
         .unwrap();

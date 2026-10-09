@@ -100,6 +100,5 @@ export type UserRoles = {
 
 export type ChangeUserRolesInput = {
 	userId: number;
-	add_ids: number[];
-	remove_ids: number[];
+	role_ids: number[];
 };

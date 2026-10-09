@@ -131,10 +131,9 @@ export async function changeUserStatus({
 
 export async function changeUserRoles({
 	userId,
-	add_ids,
-	remove_ids,
+	role_ids,
 }: ChangeUserRolesInput): Promise<void> {
 	await api.patch(`auth/users/${userId}/roles`, {
-		json: { add_ids, remove_ids },
+		json: { role_ids },
 	});
 }

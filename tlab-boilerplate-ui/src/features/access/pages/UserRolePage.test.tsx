@@ -71,8 +71,7 @@ test("페이지를 넘겨 선택한 롤의 추가와 해제를 저장한다", as
 	await waitFor(() =>
 		expect(vi.mocked(changeUserRoles).mock.calls[0]?.[0]).toEqual({
 			userId: 7,
-			add_ids: [2, 3],
-			remove_ids: [1],
+			role_ids: [2, 3],
 		}),
 	);
 });

@@ -10,8 +10,7 @@ use crate::{
 
 pub struct SetUserRolesCommand {
     pub user_account_id: i64,
-    pub add_ids: Vec<i64>,
-    pub remove_ids: Vec<i64>,
+    pub role_ids: Vec<i64>,
 }
 
 pub struct SetUserRolesUsecase {
@@ -32,20 +31,14 @@ impl SetUserRolesUsecase {
         .await?
         .ok_or(tlab::Error::NotFound("user".into()))?;
 
-        let ids: Vec<i64> = command
-            .add_ids
-            .iter()
-            .chain(&command.remove_ids)
-            .copied()
-            .collect();
-        let roles = role_repository::find_by_ids_for_update(&mut tx.context(), &ids).await?;
-        if roles.len() != ids.len() {
+        let roles =
+            role_repository::find_by_ids_for_update(&mut tx.context(), &command.role_ids).await?;
+        if roles.len() != command.role_ids.len() {
             return Err(tlab::Error::NotFound("role".into()));
         }
-        RbacService.validate_user_role_change(&user, &roles, &command.remove_ids)?;
+        RbacService.validate_user_role_change(&user, &roles)?;
 
-        user_repository::remove_roles(&mut tx.context(), user.id, &command.remove_ids).await?;
-        user_repository::add_roles(&mut tx.context(), user.id, &command.add_ids).await?;
+        user_repository::replace_roles(&mut tx.context(), user.id, &command.role_ids).await?;
         tx.commit().await?;
         Ok(())
     }

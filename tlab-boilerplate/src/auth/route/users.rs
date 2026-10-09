@@ -12,7 +12,7 @@ use crate::{
         access_claims::AccessClaims,
         entity::{Role, UserStatus},
         permission,
-        repository::user_repository,
+        repository::user_repository::{self, UserSearchCriteria},
         usecase::{
             SetUserRolesCommand, SetUserRolesUsecase, SetUserStatusCommand, SetUserStatusUsecase,
         },
@@ -102,7 +102,7 @@ async fn list_user_roles(
             ApiResponse::internal_error("failed to load user roles")
         })?
         .ok_or_else(|| ApiResponse::not_found("user not found"))?;
-    let roles = user_repository::find_roles_by_user_account_id(&mut conn.context(), id)
+    let roles = user_repository::find_all_roles(&mut conn.context(), id)
         .await
         .map_err(|error| {
             tracing::error!(?error, "Failed to load user roles");
@@ -121,8 +121,7 @@ async fn list_user_roles(
 
 #[derive(serde::Deserialize)]
 struct SetUserRolesRequest {
-    add_ids: Vec<i64>,
-    remove_ids: Vec<i64>,
+    role_ids: Vec<i64>,
 }
 
 async fn set_user_roles(
@@ -133,14 +132,14 @@ async fn set_user_roles(
 ) -> ApiResult<()> {
     permission::require(&container, &claims, permission::USER_MANAGE).await?;
 
-    let ids: Vec<_> = request
-        .add_ids
-        .iter()
-        .chain(&request.remove_ids)
-        .copied()
-        .collect();
-    if ids.iter().any(|id| *id <= 0)
-        || ids.iter().copied().collect::<HashSet<_>>().len() != ids.len()
+    if request.role_ids.iter().any(|id| *id <= 0)
+        || request
+            .role_ids
+            .iter()
+            .copied()
+            .collect::<HashSet<_>>()
+            .len()
+            != request.role_ids.len()
     {
         return Err(ApiResponse::bad_request("invalid role ids"));
     }
@@ -148,8 +147,7 @@ async fn set_user_roles(
     SetUserRolesUsecase::new(container.database.clone())
         .execute(&SetUserRolesCommand {
             user_account_id: id,
-            add_ids: request.add_ids,
-            remove_ids: request.remove_ids,
+            role_ids: request.role_ids,
         })
         .await
         .map_err(|error| match error {
@@ -213,18 +211,20 @@ async fn list_users(
         .map(str::parse::<UserStatus>)
         .transpose()
         .map_err(|_| ApiResponse::bad_request("invalid status"))?;
-    let search = query.q.as_deref().map(str::trim).filter(|q| !q.is_empty());
 
     let mut conn = container.database.conn().await.map_err(|error| {
         tracing::error!(?error, "Failed to connect to database");
         ApiResponse::internal_error("failed to list users")
     })?;
-    let paging = user_repository::find_user_accounts(
+    let paging = user_repository::search(
         &mut conn.context(),
-        search,
-        status,
-        i64::from(page_size),
-        i64::from(page - 1) * i64::from(page_size),
+        &UserSearchCriteria {
+            query: query.q.as_deref(),
+            status,
+            identity_provider: None,
+            limit: i64::from(page_size),
+            offset: i64::from(page - 1) * i64::from(page_size),
+        },
     )
     .await
     .map_err(|error| {
@@ -241,9 +241,18 @@ async fn list_users(
                 name: item.account.name,
                 email: item.account.email,
                 status: item.account.status.as_str().to_owned(),
-                roles: item.roles,
-                providers: item.providers,
-                latest_login_at: item.latest_login_at.map(|value| value.to_rfc3339()),
+                roles: item.roles.into_iter().map(|role| role.code).collect(),
+                providers: item
+                    .identities
+                    .iter()
+                    .map(|identity| identity.provider.as_str().to_owned())
+                    .collect(),
+                latest_login_at: item
+                    .identities
+                    .iter()
+                    .filter_map(|identity| identity.last_login_at)
+                    .max()
+                    .map(|dt| dt.to_rfc3339()),
             })
             .collect(),
         total: paging.total,
@@ -408,8 +417,7 @@ mod tests {
                     .header(header::AUTHORIZATION, format!("Bearer {token}"))
                     .header(header::CONTENT_TYPE, "application/json")
                     .body(Body::from(
-                        serde_json::json!({ "add_ids": [admin_id, sales_id], "remove_ids": [] })
-                            .to_string(),
+                        serde_json::json!({ "role_ids": [admin_id, sales_id] }).to_string(),
                     ))
                     .unwrap(),
             )
@@ -442,7 +450,7 @@ mod tests {
                     .header(header::AUTHORIZATION, format!("Bearer {token}"))
                     .header(header::CONTENT_TYPE, "application/json")
                     .body(Body::from(
-                        serde_json::json!({ "add_ids": [], "remove_ids": [sales_id] }).to_string(),
+                        serde_json::json!({ "role_ids": [admin_id] }).to_string(),
                     ))
                     .unwrap(),
             )
@@ -471,7 +479,7 @@ mod tests {
                     .header(header::AUTHORIZATION, format!("Bearer {token}"))
                     .header(header::CONTENT_TYPE, "application/json")
                     .body(Body::from(
-                        serde_json::json!({ "add_ids": [], "remove_ids": [admin_id] }).to_string(),
+                        serde_json::json!({ "role_ids": [] }).to_string(),
                     ))
                     .unwrap(),
             )

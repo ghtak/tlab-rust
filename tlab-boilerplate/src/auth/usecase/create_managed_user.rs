@@ -32,28 +32,30 @@ impl CreateManagedUserUsecase {
         let password_hash = self.password_hasher.hash(&command.password)?;
         let mut tx = self.app_db.tx().await?;
 
-        let user_account = user_repository::create_user_account(
+        let user_account = user_repository::save_user_account(
             &mut tx.context(),
-            &command.name,
-            &command.email,
-            entity::UserStatus::Active,
+            &entity::UserAccount::new(
+                command.name.clone(),
+                command.email.clone(),
+                entity::UserStatus::Active,
+            ),
         )
         .await?;
 
-        let user_identity = user_repository::create_user_identity(
+        let user_identity = user_repository::save_user_identity(
             &mut tx.context(),
-            user_account.id,
-            entity::Provider::Managed,
-            user_account.email.as_str(),
-            Some(user_account.email.as_str()),
+            &entity::UserIdentity::new(
+                user_account.id,
+                entity::Provider::Managed,
+                user_account.email.clone(),
+                Some(user_account.email.clone()),
+            ),
         )
         .await?;
 
-        user_repository::create_user_credential(
+        user_repository::save_user_credential(
             &mut tx.context(),
-            user_identity.id,
-            entity::Provider::Managed,
-            &password_hash,
+            &entity::UserCredential::new(user_identity.id, entity::Provider::Managed, password_hash),
         )
         .await?;
 

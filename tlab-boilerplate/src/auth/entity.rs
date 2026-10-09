@@ -69,6 +69,22 @@ pub struct UserAccount {
     pub update_by: Option<i64>,
 }
 
+impl UserAccount {
+    pub fn new(name: String, email: String, status: UserStatus) -> Self {
+        let now = chrono::Utc::now();
+        Self {
+            id: -1,
+            name,
+            email,
+            status,
+            created_at: now,
+            updated_at: now,
+            create_by: None,
+            update_by: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Permission {
     pub id: i64,
@@ -94,6 +110,25 @@ pub struct UserIdentity {
     pub last_login_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
+impl UserIdentity {
+    pub fn new(
+        user_account_id: i64,
+        provider: Provider,
+        provider_subject: String,
+        provider_email: Option<String>,
+    ) -> Self {
+        Self {
+            id: -1,
+            user_account_id,
+            provider,
+            provider_subject,
+            provider_email,
+            created_at: chrono::Utc::now(),
+            last_login_at: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct UserCredential {
     pub user_identity_id: i64,
@@ -102,10 +137,15 @@ pub struct UserCredential {
     pub password_changed_at: chrono::DateTime<chrono::Utc>,
 }
 
-#[derive(Debug, Clone)]
-pub struct ManagedLoginUser {
-    pub account: UserAccount,
-    pub credential: UserCredential,
+impl UserCredential {
+    pub fn new(user_identity_id: i64, provider: Provider, password_hash: String) -> Self {
+        Self {
+            user_identity_id,
+            provider,
+            password_hash,
+            password_changed_at: chrono::Utc::now(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -115,4 +155,12 @@ pub struct RefreshToken {
     pub token_hash: Vec<u8>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub expires_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Clone)]
+pub struct User {
+    pub account: UserAccount,
+    pub identities: Vec<UserIdentity>,
+    pub credentials: Vec<UserCredential>,
+    pub roles: Vec<Role>,
 }

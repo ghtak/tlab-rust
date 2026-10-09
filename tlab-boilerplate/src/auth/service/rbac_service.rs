@@ -9,17 +9,8 @@ use crate::{
 pub struct RbacService;
 
 impl RbacService {
-    pub fn validate_user_role_change(
-        &self,
-        user: &UserAccount,
-        roles: &[Role],
-        remove_ids: &[i64],
-    ) -> tlab::Result<()> {
-        if user.email == "admin@localhost"
-            && roles
-                .iter()
-                .any(|role| role.code == "admin" && remove_ids.contains(&role.id))
-        {
+    pub fn validate_user_role_change(&self, user: &UserAccount, roles: &[Role]) -> tlab::Result<()> {
+        if user.email == "admin@localhost" && !roles.iter().any(|role| role.code == "admin") {
             return Err(tlab::Error::InvalidOperation(
                 "initial admin must retain admin role".into(),
             ));

@@ -41,7 +41,7 @@ impl SetUserStatusUsecase {
 
         user.status = command.status;
         user.update_by = Some(command.actor_id);
-        user_repository::update_user_account(&mut tx.context(), &user).await?;
+        user_repository::save_user_account(&mut tx.context(), &user).await?;
         tx.commit().await?;
         Ok(())
     }

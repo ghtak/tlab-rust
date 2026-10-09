@@ -1,7 +1,11 @@
 use std::sync::Arc;
 
 use crate::app_container::AppDB;
-use crate::auth::{repository::user_repository, service::TokenService};
+use crate::auth::{
+    entity::{self, Provider, UserStatus},
+    repository::user_repository,
+    service::TokenService,
+};
 
 //dummy login password
 const DUMMY_LOGIN_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$o90CMRSOfYxJu7s/gJVLzA$QRg9RtFOtSICuubzdE+iJbUo0ct1tJxphWFyp/OLCXo";
@@ -40,32 +44,54 @@ impl LoginManagedUserUsecase {
         command: &LoginManagedUserCommand,
     ) -> tlab::Result<LoginManagedUserResult> {
         let mut conn = self.app_db.conn().await?;
-        let managed_login_user =
-            user_repository::find_managed_login_user(&mut conn.context(), &command.email).await?;
+        let user = user_repository::find_user_by_email(&mut conn.context(), &command.email).await?;
 
-        let Some(managed_login_user) = managed_login_user else {
+        let Some(user) = user else {
+            let _ = self
+                .password_hasher
+                .verify(&command.password, DUMMY_LOGIN_HASH);
+            return Err(tlab::Error::InvalidCredentials);
+        };
+        let entity::User {
+            account,
+            identities,
+            credentials,
+            ..
+        } = user;
+        let managed = identities
+            .into_iter()
+            .find(|identity| identity.provider == Provider::Managed)
+            .and_then(|identity| {
+                credentials
+                    .into_iter()
+                    .find(|credential| {
+                        credential.provider == Provider::Managed
+                            && credential.user_identity_id == identity.id
+                    })
+                    .map(|credential| (identity, credential))
+            });
+        let Some((mut identity, credential)) = managed else {
             let _ = self
                 .password_hasher
                 .verify(&command.password, DUMMY_LOGIN_HASH);
             return Err(tlab::Error::InvalidCredentials);
         };
 
-        if managed_login_user.account.status != crate::auth::entity::UserStatus::Active {
+        if account.status != UserStatus::Active {
             return Err(tlab::Error::InvalidCredentials);
         }
 
         self.password_hasher.verify(
             &command.password,
-            &managed_login_user.credential.password_hash,
+            &credential.password_hash,
         )?;
 
-        let identity_id = managed_login_user.credential.user_identity_id;
-        let account = managed_login_user.account;
         let tokens = self
             .token_service
             .issue_login_tokens(&mut conn.context(), account.id)
             .await?;
-        user_repository::mark_login(&mut conn.context(), identity_id).await?;
+        identity.last_login_at = Some(chrono::Utc::now());
+        user_repository::save_user_identity(&mut conn.context(), &identity).await?;
 
         Ok(LoginManagedUserResult { tokens })
     }
@@ -148,12 +174,15 @@ mod tests {
     async fn delete_user(app_db: &AppDB, account: &entity::UserAccount) {
         let mut tx = app_db.tx().await.unwrap();
         let mut context = tx.context();
-        let identity_id = user_repository::find_managed_login_user(&mut context, &account.email)
+        let identity_id = user_repository::find_user_by_email(&mut context, &account.email)
             .await
             .unwrap()
             .unwrap()
-            .credential
-            .user_identity_id;
+            .identities
+            .into_iter()
+            .find(|identity| identity.provider == entity::Provider::Managed)
+            .unwrap()
+            .id;
         user_repository::delete_user_credential(&mut context, identity_id)
             .await
             .unwrap();

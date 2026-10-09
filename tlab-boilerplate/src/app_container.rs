@@ -6,6 +6,7 @@ use super::app_config::AppConfig;
 
 pub type AppDB = tlab::sqlxdb::Database<sqlx::Postgres>;
 pub type AppDBCtx<'a> = tlab::sqlxdb::Context<'a, sqlx::Postgres>;
+pub type AppQueryBuilder = sqlx::QueryBuilder<sqlx::Postgres>;
 
 pub struct AppContainer {
     pub config: AppConfig,

@@ -27,20 +27,24 @@ impl CreateSocialUserUsecase {
         command: &CreateSocialUserCommand,
     ) -> tlab::Result<entity::UserAccount> {
         let mut tx = self.app_db.tx().await?;
-        let user_account = user_repository::create_user_account(
+        let user_account = user_repository::save_user_account(
             &mut tx.context(),
-            &command.name,
-            &command.email,
-            entity::UserStatus::Active,
+            &entity::UserAccount::new(
+                command.name.clone(),
+                command.email.clone(),
+                entity::UserStatus::Active,
+            ),
         )
         .await?;
 
-        user_repository::create_user_identity(
+        user_repository::save_user_identity(
             &mut tx.context(),
-            user_account.id,
-            command.provider,
-            &command.provider_subject,
-            Some(&command.email),
+            &entity::UserIdentity::new(
+                user_account.id,
+                command.provider,
+                command.provider_subject.clone(),
+                Some(command.email.clone()),
+            ),
         )
         .await?;
 

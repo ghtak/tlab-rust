@@ -51,7 +51,7 @@ impl LoginGoogleUserUsecase {
         let identity =
             user_repository::find_user_identity(&mut conn.context(), Provider::Google, &claims.sub)
                 .await?;
-        let (account, identity_id) = if let Some(identity) = identity {
+        let (account, mut identity) = if let Some(identity) = identity {
             let account =
                 user_repository::find_user_account(&mut conn.context(), identity.user_account_id)
                     .await?
@@ -59,7 +59,7 @@ impl LoginGoogleUserUsecase {
                         tlab::Error::IllegalState("social user account not found".into())
                     })?;
             drop(conn);
-            (account, identity.id)
+            (account, identity)
         } else {
             drop(conn);
             if !claims.email_verified {
@@ -89,7 +89,7 @@ impl LoginGoogleUserUsecase {
             )
             .await?
             .ok_or_else(|| tlab::Error::IllegalState("social user identity not found".into()))?;
-            (account, identity.id)
+            (account, identity)
         };
 
         if account.status != UserStatus::Active {
@@ -101,7 +101,8 @@ impl LoginGoogleUserUsecase {
             .token_service
             .issue_login_tokens(&mut conn.context(), account.id)
             .await?;
-        user_repository::mark_login(&mut conn.context(), identity_id).await?;
+        identity.last_login_at = Some(chrono::Utc::now());
+        user_repository::save_user_identity(&mut conn.context(), &identity).await?;
         Ok(tokens)
     }
 }

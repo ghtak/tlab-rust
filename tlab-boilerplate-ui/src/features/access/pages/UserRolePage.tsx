@@ -274,8 +274,7 @@ function UserRoleEditor({ initial }: { initial: UserRoles }) {
 						onClick={() =>
 							save.mutate({
 								userId: initial.user.id,
-								add_ids: addIds,
-								remove_ids: removeIds,
+								role_ids: [...selected],
 							})
 						}
 					>

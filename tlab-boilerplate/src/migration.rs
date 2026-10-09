@@ -63,26 +63,28 @@ async fn create_admin_user_if_missing(
 
     if !admin_exists {
         let password_hash = password_hasher.hash("passwd")?;
-        let account = user_repository::create_user_account(
+        let account = user_repository::save_user_account(
             context,
-            "admin",
-            ADMIN_EMAIL,
-            entity::UserStatus::Active,
+            &entity::UserAccount::new(
+                "admin".into(),
+                ADMIN_EMAIL.into(),
+                entity::UserStatus::Active,
+            ),
         )
         .await?;
-        let identity = user_repository::create_user_identity(
+        let identity = user_repository::save_user_identity(
             context,
-            account.id,
-            entity::Provider::Managed,
-            ADMIN_EMAIL,
-            Some(ADMIN_EMAIL),
+            &entity::UserIdentity::new(
+                account.id,
+                entity::Provider::Managed,
+                ADMIN_EMAIL.into(),
+                Some(ADMIN_EMAIL.into()),
+            ),
         )
         .await?;
-        user_repository::create_user_credential(
+        user_repository::save_user_credential(
             context,
-            identity.id,
-            entity::Provider::Managed,
-            &password_hash,
+            &entity::UserCredential::new(identity.id, entity::Provider::Managed, password_hash),
         )
         .await?;
         tracing::info!(email = ADMIN_EMAIL, "Managed admin user created");
