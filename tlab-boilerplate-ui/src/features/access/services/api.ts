@@ -10,6 +10,8 @@ import type {
 	RoleList,
 	RoleListParams,
 	RolePermissions,
+	UserList,
+	UserListParams,
 } from "../types";
 
 export async function createPermission(
@@ -87,4 +89,23 @@ export async function changeRolePermissions({
 	await api.patch(`auth/roles/${roleId}/permissions`, {
 		json: { add_ids, remove_ids },
 	});
+}
+
+export async function getUsers({
+	q,
+	status,
+	page,
+	pageSize,
+}: UserListParams): Promise<UserList> {
+	const response = await api
+		.get("auth/users", {
+			searchParams: {
+				...(q ? { q } : {}),
+				...(status ? { status } : {}),
+				page: String(page),
+				page_size: String(pageSize),
+			},
+		})
+		.json<{ data: UserList }>();
+	return response.data;
 }

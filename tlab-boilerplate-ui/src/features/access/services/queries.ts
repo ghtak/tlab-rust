@@ -1,6 +1,10 @@
 import { queryOptions } from "@tanstack/react-query";
-import type { PermissionListParams, RoleListParams } from "../types";
-import { getPermissions, getRolePermissions, getRoles } from "./api";
+import type {
+	PermissionListParams,
+	RoleListParams,
+	UserListParams,
+} from "../types";
+import { getPermissions, getRolePermissions, getRoles, getUsers } from "./api";
 
 export function permissionsQuery(params: PermissionListParams) {
 	return queryOptions({
@@ -22,6 +26,14 @@ export function rolePermissionsQuery(roleId: number) {
 	return queryOptions({
 		queryKey: ["rolePermissions", roleId],
 		queryFn: () => getRolePermissions(roleId),
+		retry: false,
+	});
+}
+
+export function usersQuery(params: UserListParams) {
+	return queryOptions({
+		queryKey: ["users", params],
+		queryFn: () => getUsers(params),
 		retry: false,
 	});
 }

@@ -58,3 +58,28 @@ export type ChangeRolePermissionsInput = {
 	add_ids: number[];
 	remove_ids: number[];
 };
+
+export type UserStatus = "active" | "suspended" | "withdrawn";
+
+export type User = {
+	id: number;
+	name: string;
+	email: string;
+	status: UserStatus;
+	roles: string[];
+	providers: string[];
+};
+
+export type UserListParams = {
+	q: string;
+	status: UserStatus | "";
+	page: number;
+	pageSize: number;
+};
+
+export type UserList = {
+	items: User[];
+	total: number;
+	page: number;
+	page_size: number;
+};

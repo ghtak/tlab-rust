@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use chrono::{DateTime, Utc};
-use tlab::sqlxdb;
+use tlab::{paging::Paging, sqlxdb};
 
 use crate::{app_container::AppDBCtx, auth::entity};
 
@@ -33,6 +33,80 @@ impl UserAccountRow {
             update_by: self.update_by,
         })
     }
+}
+
+#[derive(sqlx::FromRow)]
+struct UserListRow {
+    #[sqlx(flatten)]
+    account: UserAccountRow,
+    roles: Vec<String>,
+    providers: Vec<String>,
+}
+
+pub struct UserListItem {
+    pub account: entity::UserAccount,
+    pub roles: Vec<String>,
+    pub providers: Vec<String>,
+}
+
+pub async fn find_user_accounts(
+    context: &mut AppDBCtx<'_>,
+    query: Option<&str>,
+    status: Option<entity::UserStatus>,
+    limit: i64,
+    offset: i64,
+) -> tlab::Result<Paging<UserListItem>> {
+    let status = status.map(entity::UserStatus::as_str);
+    let total: i64 = sqlx::query_scalar(
+        r#"SELECT COUNT(*) FROM tlab_user_account
+        WHERE ($1::TEXT IS NULL OR name ILIKE '%' || $1 || '%' OR email ILIKE '%' || $1 || '%')
+          AND ($2::TEXT IS NULL OR status = $2)"#,
+    )
+    .bind(query)
+    .bind(status)
+    .fetch_one(context.backend())
+    .await
+    .map_err(sqlxdb::postgres::map_error)?;
+
+    let rows: Vec<UserListRow> = sqlx::query_as(
+        r#"SELECT account.id, account.name, account.email, account.status,
+               account.created_at, account.updated_at, account.create_by, account.update_by,
+               ARRAY(SELECT role.code::TEXT
+                     FROM tlab_user_role AS link
+                     JOIN tlab_role AS role ON role.id = link.role_id
+                     WHERE link.user_account_id = account.id
+                     ORDER BY role.code) AS roles,
+               ARRAY(SELECT DISTINCT identity.provider::TEXT
+                     FROM tlab_user_identity AS identity
+                     WHERE identity.user_account_id = account.id
+                     ORDER BY identity.provider::TEXT) AS providers
+        FROM tlab_user_account AS account
+        WHERE ($1::TEXT IS NULL OR account.name ILIKE '%' || $1 || '%' OR account.email ILIKE '%' || $1 || '%')
+          AND ($2::TEXT IS NULL OR account.status = $2)
+        ORDER BY account.created_at DESC, account.id DESC
+        LIMIT $3 OFFSET $4"#,
+    )
+    .bind(query)
+    .bind(status)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(context.backend())
+    .await
+    .map_err(sqlxdb::postgres::map_error)?;
+
+    Ok(Paging {
+        items: rows
+            .into_iter()
+            .map(|row| {
+                Ok(UserListItem {
+                    account: row.account.into_entity()?,
+                    roles: row.roles,
+                    providers: row.providers,
+                })
+            })
+            .collect::<tlab::Result<Vec<_>>>()?,
+        total,
+    })
 }
 
 #[derive(sqlx::FromRow)]

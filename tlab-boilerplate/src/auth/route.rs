@@ -1,6 +1,7 @@
 mod google_oauth2;
 mod permissions;
 mod roles;
+mod users;
 
 use std::sync::Arc;
 
@@ -36,6 +37,7 @@ pub fn router() -> axum::Router<Arc<AppContainer>> {
         .merge(google_oauth2::router())
         .merge(permissions::router())
         .merge(roles::router())
+        .merge(users::router())
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
