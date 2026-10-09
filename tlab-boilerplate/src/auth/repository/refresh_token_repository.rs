@@ -130,7 +130,7 @@ pub async fn find_all_by_user_account_id(
         .collect())
 }
 
-pub async fn delete(
+pub async fn delete_by_user_account_id_and_session_id(
     context: &mut AppDBCtx<'_>,
     user_account_id: i64,
     session_id: Uuid,
@@ -227,10 +227,10 @@ mod tests {
             2
         );
 
-        assert!(delete(&mut tx.context(), user_id, first_session_id)
+        assert!(delete_by_user_account_id_and_session_id(&mut tx.context(), user_id, first_session_id)
             .await
             .unwrap());
-        assert!(!delete(&mut tx.context(), user_id, first_session_id)
+        assert!(!delete_by_user_account_id_and_session_id(&mut tx.context(), user_id, first_session_id)
             .await
             .unwrap());
         let remaining = find_all_by_user_account_id(&mut tx.context(), user_id)

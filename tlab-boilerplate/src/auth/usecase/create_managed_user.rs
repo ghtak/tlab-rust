@@ -115,13 +115,13 @@ mod tests {
 
         let mut tx = app_db.tx().await.unwrap();
         let mut context = tx.context();
-        user_repository::delete_user_credential(&mut context, identity_id)
+        user_repository::delete_user_credential_by_user_identity_id(&mut context, identity_id)
             .await
             .unwrap();
-        user_repository::delete_user_identity(&mut context, identity_id)
+        user_repository::delete_user_identity_by_id(&mut context, identity_id)
             .await
             .unwrap();
-        user_repository::delete_user_account(&mut context, account.id)
+        user_repository::delete_user_account_by_id(&mut context, account.id)
             .await
             .unwrap();
         drop(context);

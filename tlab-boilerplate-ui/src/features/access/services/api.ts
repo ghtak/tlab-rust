@@ -88,11 +88,10 @@ export async function getRolePermissions(
 
 export async function changeRolePermissions({
 	roleId,
-	add_ids,
-	remove_ids,
+	permission_ids,
 }: ChangeRolePermissionsInput): Promise<void> {
 	await api.patch(`auth/roles/${roleId}/permissions`, {
-		json: { add_ids, remove_ids },
+		json: { permission_ids },
 	});
 }
 

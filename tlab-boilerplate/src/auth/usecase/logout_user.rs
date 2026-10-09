@@ -20,7 +20,7 @@ impl LogoutUserUsecase {
 
     pub async fn execute(&self, command: &LogoutUserCommand) -> tlab::Result<()> {
         let mut conn = self.app_db.conn().await?;
-        refresh_token_repository::delete(
+        refresh_token_repository::delete_by_user_account_id_and_session_id(
             &mut conn.context(),
             command.user_account_id,
             command.session_id,

@@ -49,11 +49,11 @@ impl LoginGoogleUserUsecase {
         let subject = claims.sub.clone();
         let mut conn = self.app_db.conn().await?;
         let identity =
-            user_repository::find_user_identity(&mut conn.context(), Provider::Google, &claims.sub)
+            user_repository::find_user_identity_by_provider_and_subject(&mut conn.context(), Provider::Google, &claims.sub)
                 .await?;
         let (account, mut identity) = if let Some(identity) = identity {
             let account =
-                user_repository::find_user_account(&mut conn.context(), identity.user_account_id)
+                user_repository::find_user_account_by_id(&mut conn.context(), identity.user_account_id)
                     .await?
                     .ok_or_else(|| {
                         tlab::Error::IllegalState("social user account not found".into())
@@ -82,7 +82,7 @@ impl LoginGoogleUserUsecase {
                 .execute(&command)
                 .await?;
             let mut conn = self.app_db.conn().await?;
-            let identity = user_repository::find_user_identity(
+            let identity = user_repository::find_user_identity_by_provider_and_subject(
                 &mut conn.context(),
                 Provider::Google,
                 &subject,
@@ -162,7 +162,7 @@ mod tests {
 
         let mut conn = app.database.conn().await.unwrap();
         let identity =
-            user_repository::find_user_identity(&mut conn.context(), Provider::Google, &subject)
+            user_repository::find_user_identity_by_provider_and_subject(&mut conn.context(), Provider::Google, &subject)
                 .await
                 .unwrap()
                 .unwrap();
@@ -178,7 +178,7 @@ mod tests {
 
         let mut tx = app.database.tx().await.unwrap();
         for session in sessions {
-            refresh_token_repository::delete(
+            refresh_token_repository::delete_by_user_account_id_and_session_id(
                 &mut tx.context(),
                 identity.user_account_id,
                 session.session_id,
@@ -186,10 +186,10 @@ mod tests {
             .await
             .unwrap();
         }
-        user_repository::delete_user_identity(&mut tx.context(), identity.id)
+        user_repository::delete_user_identity_by_id(&mut tx.context(), identity.id)
             .await
             .unwrap();
-        user_repository::delete_user_account(&mut tx.context(), identity.user_account_id)
+        user_repository::delete_user_account_by_id(&mut tx.context(), identity.user_account_id)
             .await
             .unwrap();
         tx.commit().await.unwrap();

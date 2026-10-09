@@ -10,11 +10,13 @@ use crate::{
     app_container::AppContainer,
     auth::{
         access_claims::AccessClaims,
-        permission,
-        repository::role_repository::{self, DeleteRoleResult},
+        entity, permission,
+        repository::role_repository::{self, RoleSearchCriteria},
         usecase::{SetRolePermissionsCommand, SetRolePermissionsUsecase},
     },
 };
+
+use super::permissions::PermissionResponse;
 
 pub(super) fn router() -> axum::Router<Arc<AppContainer>> {
     axum::Router::new()
@@ -32,15 +34,7 @@ pub(super) fn router() -> axum::Router<Arc<AppContainer>> {
 #[derive(serde::Serialize)]
 struct RolePermissionsResponse {
     role: RoleResponse,
-    permission_ids: Vec<i64>,
-    linked_permissions: Vec<LinkedPermissionResponse>,
-}
-
-#[derive(serde::Serialize)]
-struct LinkedPermissionResponse {
-    id: i64,
-    code: String,
-    description: Option<String>,
+    permissions: Vec<PermissionResponse>,
 }
 
 async fn list_role_permissions(
@@ -61,35 +55,23 @@ async fn list_role_permissions(
             ApiResponse::internal_error("failed to load role permissions")
         })?
         .ok_or_else(|| ApiResponse::not_found("role not found"))?;
-    let linked_permissions = role_repository::find_permissions(&mut conn.context(), id)
+    let permissions = role_repository::find_all_permissions_by_id(&mut conn.context(), id)
         .await
         .map_err(|error| {
             tracing::error!(?error, "Failed to load role permissions");
             ApiResponse::internal_error("failed to load role permissions")
         })?;
     let mut role_response: RoleResponse = role.into();
-    role_response.permission_count = linked_permissions.len() as i64;
+    role_response.permission_count = permissions.len() as i64;
     Ok(ApiResponse::data(RolePermissionsResponse {
         role: role_response,
-        permission_ids: linked_permissions
-            .iter()
-            .map(|permission| permission.id)
-            .collect(),
-        linked_permissions: linked_permissions
-            .into_iter()
-            .map(|permission| LinkedPermissionResponse {
-                id: permission.id,
-                code: permission.code,
-                description: permission.description,
-            })
-            .collect(),
+        permissions: permissions.into_iter().map(Into::into).collect(),
     }))
 }
 
 #[derive(serde::Deserialize)]
 struct SetRolePermissionsRequest {
-    add_ids: Vec<i64>,
-    remove_ids: Vec<i64>,
+    permission_ids: Vec<i64>,
 }
 
 async fn set_role_permissions(
@@ -100,14 +82,14 @@ async fn set_role_permissions(
 ) -> ApiResult<()> {
     permission::require(&container, &claims, permission::USER_MANAGE).await?;
 
-    let ids: Vec<_> = request
-        .add_ids
-        .iter()
-        .chain(&request.remove_ids)
-        .copied()
-        .collect();
-    if ids.iter().any(|id| *id <= 0)
-        || ids.iter().copied().collect::<HashSet<_>>().len() != ids.len()
+    if request.permission_ids.iter().any(|id| *id <= 0)
+        || request
+            .permission_ids
+            .iter()
+            .copied()
+            .collect::<HashSet<_>>()
+            .len()
+            != request.permission_ids.len()
     {
         return Err(ApiResponse::bad_request("invalid permission ids"));
     }
@@ -115,8 +97,7 @@ async fn set_role_permissions(
     SetRolePermissionsUsecase::new(container.database.clone())
         .execute(&SetRolePermissionsCommand {
             role_id: id,
-            add_ids: request.add_ids,
-            remove_ids: request.remove_ids,
+            permission_ids: request.permission_ids,
         })
         .await
         .map_err(|error| match error {
@@ -181,15 +162,18 @@ async fn create_role(
         tracing::error!(?error, "Failed to connect to database");
         ApiResponse::internal_error("failed to create role")
     })?;
-    let created = role_repository::insert(&mut conn.context(), code, description)
-        .await
-        .map_err(|error| match error {
-            tlab::Error::Conflict(_) => ApiResponse::conflict("role already exists"),
-            error => {
-                tracing::error!(?error, "Failed to create role");
-                ApiResponse::internal_error("failed to create role")
-            }
-        })?;
+    let created = role_repository::save(
+        &mut conn.context(),
+        &entity::Role::new(code.to_owned(), description.map(str::to_owned)),
+    )
+    .await
+    .map_err(|error| match error {
+        tlab::Error::Conflict(_) => ApiResponse::conflict("role already exists"),
+        error => {
+            tracing::error!(?error, "Failed to create role");
+            ApiResponse::internal_error("failed to create role")
+        }
+    })?;
     Ok(ApiResponse::created(created.into()))
 }
 
@@ -225,11 +209,13 @@ async fn list_roles(
         tracing::error!(?error, "Failed to connect to database");
         ApiResponse::internal_error("failed to list roles")
     })?;
-    let paging = role_repository::find(
+    let paging = role_repository::search(
         &mut conn.context(),
-        query.code.as_deref(),
-        i64::from(page_size),
-        i64::from(page - 1) * i64::from(page_size),
+        &RoleSearchCriteria {
+            code: query.code.as_deref(),
+            limit: i64::from(page_size),
+            offset: i64::from(page - 1) * i64::from(page_size),
+        },
     )
     .await
     .map_err(|error| {
@@ -263,23 +249,23 @@ async fn delete_role(
         tracing::error!(?error, "Failed to connect to database");
         ApiResponse::internal_error("failed to delete role")
     })?;
-    match role_repository::delete(&mut conn.context(), id)
+    let deleted = role_repository::delete_by_id(&mut conn.context(), id)
         .await
         .map_err(|error| {
             tracing::error!(?error, "Failed to delete role");
             ApiResponse::internal_error("failed to delete role")
-        })? {
-        DeleteRoleResult::Deleted => Ok(ApiResponse::ok()),
-        DeleteRoleResult::Protected => Err(ApiResponse::conflict("role cannot be deleted")),
-        DeleteRoleResult::NotFound => Err(ApiResponse::not_found("role not found")),
+        })?;
+    if !deleted {
+        return Err(ApiResponse::conflict("role cannot be deleted"));
     }
+    Ok(ApiResponse::ok())
 }
 
 #[cfg(test)]
 mod tests {
     use axum::{
-        body::{Body, to_bytes},
-        http::{Request, StatusCode, header},
+        body::{to_bytes, Body},
+        http::{header, Request, StatusCode},
     };
     use tower::ServiceExt;
 
@@ -329,12 +315,12 @@ mod tests {
                 .unwrap();
         drop(conn);
 
-        let patch = |id: i64, add_ids: Vec<i64>, remove_ids: Vec<i64>| {
+        let patch = |id: i64, permission_ids: Vec<i64>| {
             Request::patch(format!("/api/v1/auth/roles/{id}/permissions"))
                 .header(header::AUTHORIZATION, format!("Bearer {token}"))
                 .header(header::CONTENT_TYPE, "application/json")
                 .body(Body::from(
-                    serde_json::json!({ "add_ids": add_ids, "remove_ids": remove_ids }).to_string(),
+                    serde_json::json!({ "permission_ids": permission_ids }).to_string(),
                 ))
                 .unwrap()
         };
@@ -347,7 +333,7 @@ mod tests {
 
         let response = app
             .clone()
-            .oneshot(patch(role_id, vec![file_manage_id, user_manage_id], vec![]))
+            .oneshot(patch(role_id, vec![file_manage_id, user_manage_id]))
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
@@ -356,18 +342,18 @@ mod tests {
         let body: serde_json::Value =
             serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
                 .unwrap();
-        assert_eq!(body["data"]["permission_ids"].as_array().unwrap().len(), 2);
+        assert_eq!(body["data"]["permissions"].as_array().unwrap().len(), 2);
         assert_eq!(body["data"]["role"]["permission_count"], 2);
 
         let response = app
             .clone()
-            .oneshot(patch(role_id, vec![], vec![file_manage_id]))
+            .oneshot(patch(role_id, vec![user_manage_id]))
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let response = app
             .clone()
-            .oneshot(patch(role_id, vec![i64::MAX], vec![user_manage_id]))
+            .oneshot(patch(role_id, vec![i64::MAX]))
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
@@ -375,14 +361,19 @@ mod tests {
         let body: serde_json::Value =
             serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
                 .unwrap();
-        assert_eq!(
-            body["data"]["permission_ids"],
-            serde_json::json!([user_manage_id])
-        );
+        assert_eq!(body["data"]["permissions"][0]["id"], user_manage_id);
+
+        let response = app.clone().oneshot(patch(role_id, vec![])).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let response = app.clone().oneshot(get(role_id)).await.unwrap();
+        let body: serde_json::Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert!(body["data"]["permissions"].as_array().unwrap().is_empty());
 
         let response = app
             .clone()
-            .oneshot(patch(admin_id, vec![], vec![user_manage_id]))
+            .oneshot(patch(admin_id, vec![file_manage_id]))
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
@@ -392,7 +383,7 @@ mod tests {
         assert_eq!(body["error"], "admin must retain user:manage");
         let response = app
             .clone()
-            .oneshot(patch(role_id, vec![user_manage_id], vec![user_manage_id]))
+            .oneshot(patch(role_id, vec![user_manage_id, user_manage_id]))
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
@@ -401,7 +392,7 @@ mod tests {
             .oneshot(
                 Request::patch(format!("/api/v1/auth/roles/{role_id}/permissions"))
                     .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(r#"{"add_ids":[],"remove_ids":[]}"#))
+                    .body(Body::from(r#"{"permission_ids":[]}"#))
                     .unwrap(),
             )
             .await
@@ -620,6 +611,6 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(response.status(), StatusCode::CONFLICT);
     }
 }

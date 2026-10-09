@@ -10,8 +10,7 @@ use crate::{
 
 pub struct SetRolePermissionsCommand {
     pub role_id: i64,
-    pub add_ids: Vec<i64>,
-    pub remove_ids: Vec<i64>,
+    pub permission_ids: Vec<i64>,
 }
 
 pub struct SetRolePermissionsUsecase {
@@ -29,22 +28,18 @@ impl SetRolePermissionsUsecase {
             .await?
             .ok_or(tlab::Error::NotFound("role".into()))?;
 
-        let ids: Vec<i64> = command
-            .add_ids
-            .iter()
-            .chain(&command.remove_ids)
-            .copied()
-            .collect();
-        let permissions =
-            permission_repository::find_all_by_ids_for_update(&mut tx.context(), &ids).await?;
-        if permissions.len() != ids.len() {
+        let permissions = permission_repository::find_all_by_ids_for_key_share(
+            &mut tx.context(),
+            &command.permission_ids,
+        )
+        .await?;
+        if permissions.len() != command.permission_ids.len() {
             return Err(tlab::Error::NotFound("permission".into()));
         }
-        RbacService.validate_role_permission_change(&role, &permissions, &command.remove_ids)?;
+        RbacService.validate_role_permission_change(&role, &permissions)?;
 
-        role_repository::remove_permissions(&mut tx.context(), role.id, &command.remove_ids)
+        role_repository::replace_permissions(&mut tx.context(), role.id, &command.permission_ids)
             .await?;
-        role_repository::add_permissions(&mut tx.context(), role.id, &command.add_ids).await?;
         tx.commit().await?;
         Ok(())
     }

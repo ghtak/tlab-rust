@@ -39,7 +39,7 @@ async fn delete_permission(
         tracing::error!(?error, "Failed to connect to database");
         ApiResponse::internal_error("failed to delete permission")
     })?;
-    let deleted = permission_repository::delete(&mut conn.context(), id)
+    let deleted = permission_repository::delete_by_id(&mut conn.context(), id)
         .await
         .map_err(|error| {
             tracing::error!(?error, "Failed to delete permission");
@@ -53,7 +53,7 @@ async fn delete_permission(
 }
 
 #[derive(serde::Serialize)]
-struct PermissionResponse {
+pub(super) struct PermissionResponse {
     id: i64,
     code: String,
     description: Option<String>,

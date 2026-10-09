@@ -102,7 +102,7 @@ impl TokenService {
         user_account_id: i64,
         session_id: Uuid,
     ) -> tlab::Result<Value> {
-        let role_ids = user_repository::find_all_role_ids(context, user_account_id).await?;
+        let role_ids = user_repository::find_all_role_ids_by_id(context, user_account_id).await?;
         serde_json::to_value(AppClaims {
             role_ids,
             session_id,

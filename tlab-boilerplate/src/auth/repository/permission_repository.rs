@@ -38,7 +38,7 @@ pub async fn save(
     })
 }
 
-pub async fn delete(context: &mut AppDBCtx<'_>, id: i64) -> tlab::Result<bool> {
+pub async fn delete_by_id(context: &mut AppDBCtx<'_>, id: i64) -> tlab::Result<bool> {
     let result = sqlx::query("DELETE FROM tlab_permission WHERE id = $1")
         .bind(id)
         .execute(context.backend())
@@ -98,7 +98,7 @@ pub async fn search(
     })
 }
 
-pub async fn find_all_by_ids_for_update(
+pub async fn find_all_by_ids_for_key_share(
     context: &mut AppDBCtx<'_>,
     ids: &[i64],
 ) -> tlab::Result<Vec<entity::Permission>> {

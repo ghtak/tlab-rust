@@ -22,12 +22,11 @@ impl RbacService {
         &self,
         role: &Role,
         permissions: &[Permission],
-        remove_ids: &[i64],
     ) -> tlab::Result<()> {
         if role.code == "admin"
-            && permissions.iter().any(|permission| {
-                permission.code == "user:manage" && remove_ids.contains(&permission.id)
-            })
+            && !permissions
+                .iter()
+                .any(|permission| permission.code == "user:manage")
         {
             return Err(tlab::Error::InvalidOperation(
                 "admin must retain user:manage".into(),
@@ -47,7 +46,7 @@ impl RbacService {
         }
 
         let permission_codes =
-            role_repository::find_permission_codes_by_role_ids(context, role_ids).await?;
+            role_repository::find_all_permission_codes_by_ids(context, role_ids).await?;
         Ok(permission_codes.iter().any(|code| code == permission_code))
     }
 }

@@ -267,7 +267,7 @@ export function RolePage() {
 						<p role="alert" className="text-sm text-destructive">
 							{deletion.error instanceof HTTPError &&
 							deletion.error.response.status === 409
-								? "사용자에게 할당된 롤은 삭제할 수 없습니다."
+								? "롤을 삭제할 수 없습니다."
 								: "롤을 삭제하지 못했습니다. 다시 시도해 주세요."}
 						</p>
 					)}

@@ -183,13 +183,13 @@ mod tests {
             .find(|identity| identity.provider == entity::Provider::Managed)
             .unwrap()
             .id;
-        user_repository::delete_user_credential(&mut context, identity_id)
+        user_repository::delete_user_credential_by_user_identity_id(&mut context, identity_id)
             .await
             .unwrap();
-        user_repository::delete_user_identity(&mut context, identity_id)
+        user_repository::delete_user_identity_by_id(&mut context, identity_id)
             .await
             .unwrap();
-        user_repository::delete_user_account(&mut context, account.id)
+        user_repository::delete_user_account_by_id(&mut context, account.id)
             .await
             .unwrap();
         drop(context);
@@ -250,7 +250,7 @@ mod tests {
             Sha256::digest(logged_in.tokens.refresh.token.as_bytes()).into();
         assert_eq!(stored.token_hash, expected_hash);
         assert_eq!(stored.expires_at.timestamp(), refresh.exp as i64);
-        let identity = user_repository::find_user_identity(
+        let identity = user_repository::find_user_identity_by_provider_and_subject(
             &mut conn.context(),
             entity::Provider::Managed,
             &account.email,

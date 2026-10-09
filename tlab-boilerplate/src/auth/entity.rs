@@ -109,6 +109,21 @@ pub struct Role {
     pub description: Option<String>,
 }
 
+impl Role {
+    pub fn new(code: String, description: Option<String>) -> Self {
+        Self {
+            id: -1,
+            code,
+            description,
+        }
+    }
+}
+
+pub struct RoleWithPermissionCount {
+    pub role: Role,
+    pub permission_count: i64,
+}
+
 #[derive(Debug, Clone)]
 pub struct UserIdentity {
     pub id: i64,

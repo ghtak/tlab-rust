@@ -95,14 +95,14 @@ async fn list_user_roles(
         tracing::error!(?error, "Failed to connect to database");
         ApiResponse::internal_error("failed to load user roles")
     })?;
-    let user = user_repository::find_user_account(&mut conn.context(), id)
+    let user = user_repository::find_user_account_by_id(&mut conn.context(), id)
         .await
         .map_err(|error| {
             tracing::error!(?error, "Failed to load user");
             ApiResponse::internal_error("failed to load user roles")
         })?
         .ok_or_else(|| ApiResponse::not_found("user not found"))?;
-    let roles = user_repository::find_all_roles(&mut conn.context(), id)
+    let roles = user_repository::find_all_roles_by_id(&mut conn.context(), id)
         .await
         .map_err(|error| {
             tracing::error!(?error, "Failed to load user roles");

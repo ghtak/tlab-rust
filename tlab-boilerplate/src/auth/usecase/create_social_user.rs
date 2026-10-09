@@ -80,7 +80,7 @@ mod tests {
         assert_eq!(account.status, entity::UserStatus::Active);
 
         let mut conn = app_db.conn().await.unwrap();
-        let identity = user_repository::find_user_identity(
+        let identity = user_repository::find_user_identity_by_provider_and_subject(
             &mut conn.context(),
             entity::Provider::Google,
             &subject,
@@ -120,7 +120,7 @@ mod tests {
         assert!(matches!(duplicate_email, Err(tlab::Error::Conflict(_))));
         let mut conn = app_db.conn().await.unwrap();
         assert!(
-            user_repository::find_user_identity(
+            user_repository::find_user_identity_by_provider_and_subject(
                 &mut conn.context(),
                 entity::Provider::Google,
                 &other_subject,
@@ -132,10 +132,10 @@ mod tests {
         drop(conn);
 
         let mut tx = app_db.tx().await.unwrap();
-        user_repository::delete_user_identity(&mut tx.context(), identity.id)
+        user_repository::delete_user_identity_by_id(&mut tx.context(), identity.id)
             .await
             .unwrap();
-        user_repository::delete_user_account(&mut tx.context(), account.id)
+        user_repository::delete_user_account_by_id(&mut tx.context(), account.id)
             .await
             .unwrap();
         tx.commit().await.unwrap();

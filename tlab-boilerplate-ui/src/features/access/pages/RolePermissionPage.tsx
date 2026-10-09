@@ -51,15 +51,12 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 	const [page, setPage] = useState(1);
 	const [filter, setFilter] = useState<"all" | "linked">("all");
 	const [selected, setSelected] = useState(
-		() => new Set(initial.permission_ids),
+		() => new Set(initial.permissions.map((permission) => permission.id)),
 	);
 	const [known, setKnown] = useState(
 		() =>
 			new Map(
-				initial.linked_permissions.map((permission) => [
-					permission.id,
-					permission,
-				]),
+				initial.permissions.map((permission) => [permission.id, permission]),
 			),
 	);
 	const catalog = useQuery({
@@ -75,7 +72,7 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 			return next;
 		});
 	}, [catalog.data]);
-	const saved = new Set(initial.permission_ids);
+	const saved = new Set(initial.permissions.map((permission) => permission.id));
 	const addIds = [...selected].filter((id) => !saved.has(id));
 	const removeIds = [...saved].filter((id) => !selected.has(id));
 	const save = useMutation({
@@ -285,8 +282,7 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 						onClick={() =>
 							save.mutate({
 								roleId: initial.role.id,
-								add_ids: addIds,
-								remove_ids: removeIds,
+								permission_ids: [...selected],
 							})
 						}
 					>

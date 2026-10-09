@@ -52,14 +52,12 @@ export type CreateRoleInput = {
 
 export type RolePermissions = {
 	role: RoleWithPermissionCount;
-	permission_ids: number[];
-	linked_permissions: Permission[];
+	permissions: Permission[];
 };
 
 export type ChangeRolePermissionsInput = {
 	roleId: number;
-	add_ids: number[];
-	remove_ids: number[];
+	permission_ids: number[];
 };
 
 export type UserStatus = "active" | "suspended" | "withdrawn";

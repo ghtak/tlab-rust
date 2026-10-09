@@ -33,11 +33,10 @@ afterEach(() => {
 	vi.clearAllMocks();
 });
 
-test("페이지를 넘겨 선택한 퍼미션의 추가·해제 차이를 저장한다", async () => {
+test("페이지를 넘겨 선택한 퍼미션 목록을 저장한다", async () => {
 	vi.mocked(getRolePermissions).mockResolvedValue({
 		role: { id: 7, code: "reviewer", description: null, permission_count: 1 },
-		permission_ids: [1],
-		linked_permissions: [{ id: 1, code: "role:read", description: null }],
+		permissions: [{ id: 1, code: "role:read", description: null }],
 	});
 	vi.mocked(getPermissions).mockImplementation(async ({ page, pageSize }) => ({
 		items:
@@ -74,8 +73,7 @@ test("페이지를 넘겨 선택한 퍼미션의 추가·해제 차이를 저장
 	await waitFor(() =>
 		expect(vi.mocked(changeRolePermissions).mock.calls[0]?.[0]).toEqual({
 			roleId: 7,
-			add_ids: [2, 3],
-			remove_ids: [1],
+			permission_ids: [2, 3],
 		}),
 	);
 });

@@ -219,7 +219,7 @@ async fn me(
         tracing::error!(?error, "Failed to connect to database");
         ApiResponse::internal_error("failed to load user")
     })?;
-    let user = user_repository::find_user_account(&mut conn.context(), claims.user_account_id()?)
+    let user = user_repository::find_user_account_by_id(&mut conn.context(), claims.user_account_id()?)
         .await
         .map_err(|error| {
             tracing::error!(?error, "Failed to load user");

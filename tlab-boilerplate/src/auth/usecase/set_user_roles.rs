@@ -24,7 +24,7 @@ impl SetUserRolesUsecase {
 
     pub async fn execute(&self, command: &SetUserRolesCommand) -> tlab::Result<()> {
         let mut tx = self.app_db.tx().await?;
-        let user = user_repository::find_user_account_for_update(
+        let user = user_repository::find_user_account_by_id_for_update(
             &mut tx.context(),
             command.user_account_id,
         )
@@ -32,7 +32,8 @@ impl SetUserRolesUsecase {
         .ok_or(tlab::Error::NotFound("user".into()))?;
 
         let roles =
-            role_repository::find_by_ids_for_update(&mut tx.context(), &command.role_ids).await?;
+            role_repository::find_all_by_ids_for_key_share(&mut tx.context(), &command.role_ids)
+                .await?;
         if roles.len() != command.role_ids.len() {
             return Err(tlab::Error::NotFound("role".into()));
         }

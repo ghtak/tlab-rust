@@ -22,7 +22,7 @@ impl SetUserStatusUsecase {
 
     pub async fn execute(&self, command: &SetUserStatusCommand) -> tlab::Result<()> {
         let mut tx = self.app_db.tx().await?;
-        let mut user = user_repository::find_user_account_for_update(
+        let mut user = user_repository::find_user_account_by_id_for_update(
             &mut tx.context(),
             command.user_account_id,
         )

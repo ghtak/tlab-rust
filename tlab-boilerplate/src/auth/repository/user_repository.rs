@@ -175,6 +175,15 @@ pub async fn search(
         builder.push_bind(status.as_str());
     }
 
+    if let Some(provider) = &criteria.identity_provider {
+        builder.push(
+            " AND EXISTS (SELECT 1 FROM tlab_user_identity AS identity \
+             WHERE identity.user_account_id = tlab_user_account.id AND identity.provider = ",
+        );
+        builder.push_bind(provider.as_str());
+        builder.push(")");
+    }
+
     let total: i64 = builder
         .build_query_scalar()
         .fetch_one(context.backend())
@@ -453,7 +462,7 @@ fn assemble_user(rows: Vec<UserFlatRow>) -> tlab::Result<Option<entity::User>> {
     }))
 }
 
-pub async fn find_user(
+pub async fn find_user_by_id(
     context: &mut AppDBCtx<'_>,
     user_account_id: i64,
 ) -> tlab::Result<Option<entity::User>> {
@@ -484,7 +493,7 @@ pub async fn find_user_by_email(
 }
 
 
-pub async fn find_all_roles(
+pub async fn find_all_roles_by_id(
     context: &mut AppDBCtx<'_>,
     user_account_id: i64,
 ) -> tlab::Result<Vec<entity::Role>> {
@@ -507,7 +516,7 @@ pub async fn find_all_roles(
         .collect())
 }
 
-pub async fn find_all_role_ids(
+pub async fn find_all_role_ids_by_id(
     context: &mut AppDBCtx<'_>,
     user_account_id: i64,
 ) -> tlab::Result<Vec<i64>> {
@@ -585,23 +594,20 @@ pub async fn save_user_account(
     row.into_entity()
 }
 
-pub async fn delete_user_account(
+pub async fn delete_user_account_by_id(
     context: &mut AppDBCtx<'_>,
     user_account_id: i64,
-) -> tlab::Result<()> {
+) -> tlab::Result<bool> {
     let result = sqlx::query("DELETE FROM tlab_user_account WHERE id = $1")
         .bind(user_account_id)
         .execute(context.backend())
         .await
         .map_err(sqlxdb::postgres::map_error)?;
 
-    if result.rows_affected() == 0 {
-        return Err(tlab::Error::NotFound("user account".into()));
-    }
-    Ok(())
+    Ok(result.rows_affected() > 0)
 }
 
-pub async fn find_user_account(
+pub async fn find_user_account_by_id(
     context: &mut AppDBCtx<'_>,
     user_account_id: i64,
 ) -> tlab::Result<Option<entity::UserAccount>> {
@@ -617,7 +623,7 @@ pub async fn find_user_account(
     row.map(UserAccountRow::into_entity).transpose()
 }
 
-pub async fn find_user_account_for_update(
+pub async fn find_user_account_by_id_for_update(
     context: &mut AppDBCtx<'_>,
     user_account_id: i64,
 ) -> tlab::Result<Option<entity::UserAccount>> {
@@ -669,7 +675,7 @@ pub async fn save_user_identity(
     row.into_entity()
 }
 
-pub async fn find_user_identity(
+pub async fn find_user_identity_by_provider_and_subject(
     context: &mut AppDBCtx<'_>,
     provider: entity::Provider,
     provider_subject: &str,
@@ -687,20 +693,17 @@ pub async fn find_user_identity(
     row.map(UserIdentityRow::into_entity).transpose()
 }
 
-pub async fn delete_user_identity(
+pub async fn delete_user_identity_by_id(
     context: &mut AppDBCtx<'_>,
     user_identity_id: i64,
-) -> tlab::Result<()> {
+) -> tlab::Result<bool> {
     let result = sqlx::query(r#"DELETE FROM tlab_user_identity WHERE id = $1"#)
         .bind(user_identity_id)
         .execute(context.backend())
         .await
         .map_err(sqlxdb::postgres::map_error)?;
 
-    if result.rows_affected() == 0 {
-        return Err(tlab::Error::NotFound("user identity".into()));
-    }
-    Ok(())
+    Ok(result.rows_affected() > 0)
 }
 
 pub async fn save_user_credential(
@@ -726,20 +729,17 @@ pub async fn save_user_credential(
     row.into_entity()
 }
 
-pub async fn delete_user_credential(
+pub async fn delete_user_credential_by_user_identity_id(
     context: &mut AppDBCtx<'_>,
     user_identity_id: i64,
-) -> tlab::Result<()> {
+) -> tlab::Result<bool> {
     let result = sqlx::query(r#"DELETE FROM tlab_user_credential WHERE user_identity_id = $1"#)
         .bind(user_identity_id)
         .execute(context.backend())
         .await
         .map_err(sqlxdb::postgres::map_error)?;
 
-    if result.rows_affected() == 0 {
-        return Err(tlab::Error::NotFound("user credential".into()));
-    }
-    Ok(())
+    Ok(result.rows_affected() > 0)
 }
 
 #[cfg(test)]
@@ -773,13 +773,13 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(
-            find_all_role_ids(&mut tx.context(), user_id)
+            find_all_role_ids_by_id(&mut tx.context(), user_id)
                 .await
                 .unwrap(),
             [admin_role_id, sales_role_id]
         );
         assert_eq!(
-            find_all_roles(&mut tx.context(), user_id)
+            find_all_roles_by_id(&mut tx.context(), user_id)
                 .await
                 .unwrap()
                 .into_iter()
@@ -791,7 +791,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(
-            find_all_role_ids(&mut tx.context(), user_id)
+            find_all_role_ids_by_id(&mut tx.context(), user_id)
                 .await
                 .unwrap(),
             [admin_role_id]
@@ -800,7 +800,7 @@ mod tests {
             .await
             .unwrap();
         assert!(
-            find_all_role_ids(&mut tx.context(), user_id)
+            find_all_role_ids_by_id(&mut tx.context(), user_id)
                 .await
                 .unwrap()
                 .is_empty()
@@ -892,7 +892,7 @@ mod tests {
         assert_eq!(user.identities.len(), 1);
         assert_eq!(user.credentials[0].password_hash, "updated-hash");
         assert_eq!(
-            find_user(&mut context, account.id)
+            find_user_by_id(&mut context, account.id)
                 .await
                 .unwrap()
                 .unwrap()
@@ -908,18 +908,38 @@ mod tests {
                 .is_none()
         );
 
-        delete_user_credential(&mut context, identity.id)
+        for (provider, expected) in [
+            (entity::Provider::Managed, 1),
+            (entity::Provider::Google, 0),
+        ] {
+            let result = search(
+                &mut context,
+                &UserSearchCriteria {
+                    query: Some(&email),
+                    status: Some(entity::UserStatus::Withdrawn),
+                    identity_provider: Some(provider),
+                    limit: 10,
+                    offset: 0,
+                },
+            )
             .await
             .unwrap();
-        delete_user_identity(&mut context, identity.id)
+            assert_eq!(result.total, expected);
+            assert_eq!(result.items.len() as i64, expected);
+        }
+
+        assert!(delete_user_credential_by_user_identity_id(&mut context, identity.id)
             .await
-            .unwrap();
-        assert!(
-            delete_user_credential(&mut context, identity.id)
-                .await
-                .is_err()
-        );
-        delete_user_account(&mut context, account.id).await.unwrap();
+            .unwrap());
+        assert!(delete_user_identity_by_id(&mut context, identity.id)
+            .await
+            .unwrap());
+        assert!(!delete_user_credential_by_user_identity_id(&mut context, identity.id)
+            .await
+            .unwrap());
+        assert!(delete_user_account_by_id(&mut context, account.id)
+            .await
+            .unwrap());
 
         drop(context);
         tx.rollback().await.unwrap();
