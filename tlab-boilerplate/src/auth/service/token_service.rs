@@ -10,6 +10,7 @@ use crate::{
     app_container::AppDBCtx,
     auth::{
         access_claims::AppClaims,
+        entity::RefreshToken,
         repository::{refresh_token_repository, user_repository},
     },
 };
@@ -35,14 +36,9 @@ impl TokenService {
         let token_hash = Self::token_hash(&tokens.refresh.token);
         let expires_at = Self::token_expires_at(&tokens.refresh)?;
 
-        refresh_token_repository::save(
-            context,
-            session_id,
-            user_account_id,
-            &token_hash,
-            expires_at,
-        )
-        .await?;
+        let session =
+            RefreshToken::new(session_id, user_account_id, token_hash.to_vec(), expires_at);
+        refresh_token_repository::save(context, &session).await?;
 
         Ok(tokens)
     }
@@ -106,8 +102,7 @@ impl TokenService {
         user_account_id: i64,
         session_id: Uuid,
     ) -> tlab::Result<Value> {
-        let role_ids =
-            user_repository::find_all_role_ids(context, user_account_id).await?;
+        let role_ids = user_repository::find_all_role_ids(context, user_account_id).await?;
         serde_json::to_value(AppClaims {
             role_ids,
             session_id,

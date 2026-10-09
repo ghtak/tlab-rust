@@ -167,6 +167,23 @@ pub struct RefreshToken {
     pub expires_at: chrono::DateTime<chrono::Utc>,
 }
 
+impl RefreshToken {
+    pub fn new(
+        session_id: uuid::Uuid,
+        user_account_id: i64,
+        token_hash: Vec<u8>,
+        expires_at: chrono::DateTime<chrono::Utc>,
+    ) -> Self {
+        Self {
+            session_id,
+            user_account_id,
+            token_hash,
+            created_at: chrono::Utc::now(),
+            expires_at,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct User {
     pub account: UserAccount,
