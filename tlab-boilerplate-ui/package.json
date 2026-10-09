@@ -11,6 +11,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "format": "biome format --write ./src",
     "lint": "biome lint --write ./src",
     "check": "biome check --write ./src"
@@ -36,6 +37,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.5",
+    "@playwright/test": "^1.64.0",
     "@tanstack/devtools-vite": "0.8.5",
     "@tanstack/eslint-plugin-query": "^5.104.1",
     "@tanstack/router-cli": "^1.132.0",
