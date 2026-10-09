@@ -1,4 +1,4 @@
-use tlab::sqlxdb;
+use tlab::{paging::Paging, sqlxdb};
 
 use crate::{app_container::AppDBCtx, auth::entity};
 
@@ -32,12 +32,12 @@ pub async fn delete(context: &mut AppDBCtx<'_>, id: i64) -> tlab::Result<bool> {
     Ok(result.rows_affected() > 0)
 }
 
-pub async fn find_page(
+pub async fn find(
     context: &mut AppDBCtx<'_>,
     code: Option<&str>,
     limit: i64,
     offset: i64,
-) -> tlab::Result<(Vec<entity::Permission>, i64)> {
+) -> tlab::Result<Paging<entity::Permission>> {
     let total: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM tlab_permission WHERE ($1::TEXT IS NULL OR code ILIKE '%' || $1 || '%')",
     )
@@ -65,5 +65,29 @@ pub async fn find_page(
             description,
         })
         .collect();
-    Ok((permissions, total))
+    Ok(Paging {
+        items: permissions,
+        total,
+    })
+}
+
+pub async fn find_by_ids_for_update(
+    context: &mut AppDBCtx<'_>,
+    ids: &[i64],
+) -> tlab::Result<Vec<entity::Permission>> {
+    let rows: Vec<(i64, String, Option<String>)> = sqlx::query_as(
+        "SELECT id, code, description FROM tlab_permission WHERE id = ANY($1) FOR KEY SHARE",
+    )
+    .bind(ids)
+    .fetch_all(context.backend())
+    .await
+    .map_err(sqlxdb::postgres::map_error)?;
+    Ok(rows
+        .into_iter()
+        .map(|(id, code, description)| entity::Permission {
+            id,
+            code,
+            description,
+        })
+        .collect())
 }

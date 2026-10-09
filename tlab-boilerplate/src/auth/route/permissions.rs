@@ -136,7 +136,7 @@ async fn list_permissions(
         tracing::error!(?error, "Failed to connect to database");
         ApiResponse::internal_error("failed to list permissions")
     })?;
-    let (permissions, total) = permission_repository::find_page(
+    let paging = permission_repository::find(
         &mut conn.context(),
         query.code.as_deref(),
         i64::from(page_size),
@@ -149,11 +149,12 @@ async fn list_permissions(
     })?;
 
     Ok(ApiResponse::data(PermissionListResponse {
-        items: permissions
+        items: paging
+            .items
             .into_iter()
             .map(PermissionResponse::from)
             .collect(),
-        total,
+        total: paging.total,
         page,
         page_size,
     }))

@@ -1,6 +1,7 @@
 ﻿import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { HTTPError } from "ky";
-import { MoreHorizontalIcon, Trash2Icon } from "lucide-react";
+import { KeyRoundIcon, MoreHorizontalIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
 import {
 	AlertDialog,
@@ -45,6 +46,7 @@ import type { Role } from "../types";
 const PAGE_SIZE = 20;
 
 export function RolePage() {
+	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const [inputCode, setInputCode] = useState("");
 	const [code, setCode] = useState("");
@@ -135,6 +137,7 @@ export function RolePage() {
 							<TableRow>
 								<TableHead className="px-5 sm:px-6">코드</TableHead>
 								<TableHead className="px-5 sm:px-6">설명</TableHead>
+								<TableHead className="px-5 sm:px-6">퍼미션</TableHead>
 								<TableHead className="w-16 px-5 text-right sm:px-6">
 									작업
 								</TableHead>
@@ -149,6 +152,9 @@ export function RolePage() {
 									<TableCell className="px-5 py-4 text-slate-600 sm:px-6">
 										{role.description ?? "—"}
 									</TableCell>
+									<TableCell className="px-5 py-4 text-slate-600 sm:px-6">
+										{role.permission_count}개
+									</TableCell>
 									<TableCell className="px-5 py-4 text-right sm:px-6">
 										<DropdownMenu>
 											<DropdownMenuTrigger
@@ -158,6 +164,16 @@ export function RolePage() {
 												<MoreHorizontalIcon />
 											</DropdownMenuTrigger>
 											<DropdownMenuContent align="end">
+												<DropdownMenuItem
+													onClick={() =>
+														void navigate({
+															to: "/roles/$roleId/permissions",
+															params: { roleId: String(role.id) },
+														})
+													}
+												>
+													<KeyRoundIcon /> 퍼미션 관리
+												</DropdownMenuItem>
 												<DropdownMenuItem
 													variant="destructive"
 													disabled={role.code === "admin"}

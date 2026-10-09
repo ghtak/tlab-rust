@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use axum::{
     extract::{Path, Query, State},
@@ -12,6 +12,7 @@ use crate::{
         access_claims::AccessClaims,
         permission,
         repository::role_repository::{self, DeleteRoleResult},
+        usecase::{SetRolePermissionsCommand, SetRolePermissionsUsecase},
     },
 };
 
@@ -22,6 +23,116 @@ pub(super) fn router() -> axum::Router<Arc<AppContainer>> {
             "/api/v1/auth/roles/{id}",
             axum::routing::delete(delete_role),
         )
+        .route(
+            "/api/v1/auth/roles/{id}/permissions",
+            get(list_role_permissions).patch(set_role_permissions),
+        )
+}
+
+#[derive(serde::Serialize)]
+struct RolePermissionsResponse {
+    role: RoleResponse,
+    permission_ids: Vec<i64>,
+    linked_permissions: Vec<LinkedPermissionResponse>,
+}
+
+#[derive(serde::Serialize)]
+struct LinkedPermissionResponse {
+    id: i64,
+    code: String,
+    description: Option<String>,
+}
+
+async fn list_role_permissions(
+    State(container): State<Arc<AppContainer>>,
+    claims: AccessClaims,
+    Path(id): Path<i64>,
+) -> ApiResult<RolePermissionsResponse> {
+    permission::require(&container, &claims, permission::USER_MANAGE).await?;
+
+    let mut conn = container.database.conn().await.map_err(|error| {
+        tracing::error!(?error, "Failed to connect to database");
+        ApiResponse::internal_error("failed to load role permissions")
+    })?;
+    let role = role_repository::find_by_id(&mut conn.context(), id)
+        .await
+        .map_err(|error| {
+            tracing::error!(?error, "Failed to load role");
+            ApiResponse::internal_error("failed to load role permissions")
+        })?
+        .ok_or_else(|| ApiResponse::not_found("role not found"))?;
+    let linked_permissions = role_repository::find_permissions(&mut conn.context(), id)
+        .await
+        .map_err(|error| {
+            tracing::error!(?error, "Failed to load role permissions");
+            ApiResponse::internal_error("failed to load role permissions")
+        })?;
+    let mut role_response: RoleResponse = role.into();
+    role_response.permission_count = linked_permissions.len() as i64;
+    Ok(ApiResponse::data(RolePermissionsResponse {
+        role: role_response,
+        permission_ids: linked_permissions
+            .iter()
+            .map(|permission| permission.id)
+            .collect(),
+        linked_permissions: linked_permissions
+            .into_iter()
+            .map(|permission| LinkedPermissionResponse {
+                id: permission.id,
+                code: permission.code,
+                description: permission.description,
+            })
+            .collect(),
+    }))
+}
+
+#[derive(serde::Deserialize)]
+struct SetRolePermissionsRequest {
+    add_ids: Vec<i64>,
+    remove_ids: Vec<i64>,
+}
+
+async fn set_role_permissions(
+    State(container): State<Arc<AppContainer>>,
+    claims: AccessClaims,
+    Path(id): Path<i64>,
+    axum::Json(request): axum::Json<SetRolePermissionsRequest>,
+) -> ApiResult<()> {
+    permission::require(&container, &claims, permission::USER_MANAGE).await?;
+
+    let ids: Vec<_> = request
+        .add_ids
+        .iter()
+        .chain(&request.remove_ids)
+        .copied()
+        .collect();
+    if ids.iter().any(|id| *id <= 0)
+        || ids.iter().copied().collect::<HashSet<_>>().len() != ids.len()
+    {
+        return Err(ApiResponse::bad_request("invalid permission ids"));
+    }
+
+    SetRolePermissionsUsecase::new(container.database.clone())
+        .execute(&SetRolePermissionsCommand {
+            role_id: id,
+            add_ids: request.add_ids,
+            remove_ids: request.remove_ids,
+        })
+        .await
+        .map_err(|error| match error {
+            tlab::Error::NotFound(ref resource) if resource == "role" => {
+                ApiResponse::not_found("role not found")
+            }
+            tlab::Error::NotFound(ref resource) if resource == "permission" => {
+                ApiResponse::bad_request("permission not found")
+            }
+            tlab::Error::Conflict(_) => ApiResponse::conflict("admin must retain user:manage"),
+            error => {
+                tracing::error!(?error, "Failed to set role permissions");
+                ApiResponse::internal_error("failed to set role permissions")
+            }
+        })?;
+    Ok(ApiResponse::ok())
 }
 
 #[derive(serde::Serialize)]
@@ -29,6 +140,7 @@ struct RoleResponse {
     id: i64,
     code: String,
     description: Option<String>,
+    permission_count: i64,
 }
 
 impl From<crate::auth::entity::Role> for RoleResponse {
@@ -37,6 +149,7 @@ impl From<crate::auth::entity::Role> for RoleResponse {
             id: role.id,
             code: role.code,
             description: role.description,
+            permission_count: 0,
         }
     }
 }
@@ -112,7 +225,7 @@ async fn list_roles(
         tracing::error!(?error, "Failed to connect to database");
         ApiResponse::internal_error("failed to list roles")
     })?;
-    let (roles, total) = role_repository::find_page(
+    let paging = role_repository::find(
         &mut conn.context(),
         query.code.as_deref(),
         i64::from(page_size),
@@ -125,8 +238,15 @@ async fn list_roles(
     })?;
 
     Ok(ApiResponse::data(RoleListResponse {
-        items: roles.into_iter().map(RoleResponse::from).collect(),
-        total,
+        items: paging
+            .items
+            .into_iter()
+            .map(|item| RoleResponse {
+                permission_count: item.permission_count,
+                ..item.role.into()
+            })
+            .collect(),
+        total: paging.total,
         page,
         page_size,
     }))
@@ -164,6 +284,133 @@ mod tests {
     use tower::ServiceExt;
 
     use crate::test_app;
+
+    #[tokio::test]
+    async fn manages_role_permissions_atomically_and_protects_admin() {
+        let (app, container) = test_app::setup().await;
+        let login = app
+            .clone()
+            .oneshot(
+                Request::post("/api/v1/auth/login")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        serde_json::json!({ "email": "admin@localhost", "password": "passwd" })
+                            .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body: serde_json::Value =
+            serde_json::from_slice(&to_bytes(login.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        let token = body["data"]["access_token"].as_str().unwrap();
+
+        let mut conn = container.database.conn().await.unwrap();
+        let role_id: i64 =
+            sqlx::query_scalar("INSERT INTO tlab_role (code) VALUES ($1) RETURNING id")
+                .bind(format!("test-binding-{}", uuid::Uuid::new_v4()))
+                .fetch_one(conn.context().backend())
+                .await
+                .unwrap();
+        let admin_id: i64 = sqlx::query_scalar("SELECT id FROM tlab_role WHERE code = 'admin'")
+            .fetch_one(conn.context().backend())
+            .await
+            .unwrap();
+        let user_manage_id: i64 =
+            sqlx::query_scalar("SELECT id FROM tlab_permission WHERE code = 'user:manage'")
+                .fetch_one(conn.context().backend())
+                .await
+                .unwrap();
+        let file_manage_id: i64 =
+            sqlx::query_scalar("SELECT id FROM tlab_permission WHERE code = 'file:manage'")
+                .fetch_one(conn.context().backend())
+                .await
+                .unwrap();
+        drop(conn);
+
+        let patch = |id: i64, add_ids: Vec<i64>, remove_ids: Vec<i64>| {
+            Request::patch(format!("/api/v1/auth/roles/{id}/permissions"))
+                .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    serde_json::json!({ "add_ids": add_ids, "remove_ids": remove_ids }).to_string(),
+                ))
+                .unwrap()
+        };
+        let get = |id: i64| {
+            Request::get(format!("/api/v1/auth/roles/{id}/permissions"))
+                .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap()
+        };
+
+        let response = app
+            .clone()
+            .oneshot(patch(role_id, vec![file_manage_id, user_manage_id], vec![]))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let response = app.clone().oneshot(get(role_id)).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body: serde_json::Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(body["data"]["permission_ids"].as_array().unwrap().len(), 2);
+        assert_eq!(body["data"]["role"]["permission_count"], 2);
+
+        let response = app
+            .clone()
+            .oneshot(patch(role_id, vec![], vec![file_manage_id]))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let response = app
+            .clone()
+            .oneshot(patch(role_id, vec![i64::MAX], vec![user_manage_id]))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let response = app.clone().oneshot(get(role_id)).await.unwrap();
+        let body: serde_json::Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(
+            body["data"]["permission_ids"],
+            serde_json::json!([user_manage_id])
+        );
+
+        let response = app
+            .clone()
+            .oneshot(patch(admin_id, vec![], vec![user_manage_id]))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        let response = app
+            .clone()
+            .oneshot(patch(role_id, vec![user_manage_id], vec![user_manage_id]))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let response = app
+            .clone()
+            .oneshot(
+                Request::patch(format!("/api/v1/auth/roles/{role_id}/permissions"))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(r#"{"add_ids":[],"remove_ids":[]}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        let mut conn = container.database.conn().await.unwrap();
+        sqlx::query("DELETE FROM tlab_role WHERE id = $1")
+            .bind(role_id)
+            .execute(conn.context().backend())
+            .await
+            .unwrap();
+    }
 
     #[tokio::test]
     async fn lists_creates_and_deletes_roles_with_guards() {

@@ -8,6 +8,7 @@ pub mod http;
 pub mod jwt;
 pub mod oracledb;
 pub mod oraclersdb;
+pub mod paging;
 pub mod sqlxdb;
 pub mod tracing;
 pub use error::*;

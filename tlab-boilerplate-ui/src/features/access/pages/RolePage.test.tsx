@@ -22,8 +22,12 @@ afterEach(() => {
 });
 
 test("롤 추가와 삭제 후 목록을 다시 조회한다", async () => {
-	let role: { id: number; code: string; description: string | null } | null =
-		null;
+	let role: {
+		id: number;
+		code: string;
+		description: string | null;
+		permission_count: number;
+	} | null = null;
 	vi.mocked(getRoles).mockImplementation(async ({ page, pageSize }) => ({
 		items: role ? [role] : [],
 		total: role ? 1 : 0,
@@ -31,7 +35,7 @@ test("롤 추가와 삭제 후 목록을 다시 조회한다", async () => {
 		page_size: pageSize,
 	}));
 	vi.mocked(createRole).mockImplementation(async (input) => {
-		role = { id: 7, ...input };
+		role = { id: 7, permission_count: 0, ...input };
 		return role;
 	});
 	vi.mocked(deleteRole).mockImplementation(async () => {

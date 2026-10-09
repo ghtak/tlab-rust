@@ -1,6 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { RolePage } from "../features/access/pages/RolePage";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_app/roles")({
-	component: RolePage,
+	component: Outlet,
 });

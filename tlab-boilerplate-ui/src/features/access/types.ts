@@ -26,6 +26,7 @@ export type Role = {
 	id: number;
 	code: string;
 	description: string | null;
+	permission_count: number;
 };
 
 export type RoleListParams = {
@@ -44,4 +45,16 @@ export type RoleList = {
 export type CreateRoleInput = {
 	code: string;
 	description: string | null;
+};
+
+export type RolePermissions = {
+	role: Role;
+	permission_ids: number[];
+	linked_permissions: Permission[];
+};
+
+export type ChangeRolePermissionsInput = {
+	roleId: number;
+	add_ids: number[];
+	remove_ids: number[];
 };

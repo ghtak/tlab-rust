@@ -1,8 +1,32 @@
-use crate::{app_container::AppDBCtx, auth::repository::rbac_repository};
+use crate::{
+    app_container::AppDBCtx,
+    auth::{
+        entity::{Permission, Role},
+        repository::rbac_repository,
+    },
+};
 
 pub struct RbacService;
 
 impl RbacService {
+    pub fn validate_role_permission_change(
+        &self,
+        role: &Role,
+        permissions: &[Permission],
+        remove_ids: &[i64],
+    ) -> tlab::Result<()> {
+        if role.code == "admin"
+            && permissions.iter().any(|permission| {
+                permission.code == "user:manage" && remove_ids.contains(&permission.id)
+            })
+        {
+            return Err(tlab::Error::Conflict(
+                "admin must retain user:manage".into(),
+            ));
+        }
+        Ok(())
+    }
+
     pub async fn has_permission(
         &self,
         context: &mut AppDBCtx<'_>,
