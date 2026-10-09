@@ -36,7 +36,7 @@ impl SetRolePermissionsUsecase {
             .copied()
             .collect();
         let permissions =
-            permission_repository::find_by_ids_for_update(&mut tx.context(), &ids).await?;
+            permission_repository::find_all_by_ids_for_update(&mut tx.context(), &ids).await?;
         if permissions.len() != ids.len() {
             return Err(tlab::Error::NotFound("permission".into()));
         }

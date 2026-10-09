@@ -92,6 +92,16 @@ pub struct Permission {
     pub description: Option<String>,
 }
 
+impl Permission {
+    pub fn new(code: String, description: Option<String>) -> Self {
+        Self {
+            id: -1,
+            code,
+            description,
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct Role {
     pub id: i64,

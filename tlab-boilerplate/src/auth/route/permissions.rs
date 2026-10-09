@@ -8,7 +8,12 @@ use axum::{
 use crate::{
     api_response::{ApiResponse, ApiResult},
     app_container::AppContainer,
-    auth::{access_claims::AccessClaims, permission, repository::permission_repository},
+    auth::{
+        access_claims::AccessClaims,
+        entity,
+        permission,
+        repository::permission_repository::{self, PermissionSearchCriteria},
+    },
 };
 
 pub(super) fn router() -> axum::Router<Arc<AppContainer>> {
@@ -91,7 +96,10 @@ async fn create_permission(
         tracing::error!(?error, "Failed to connect to database");
         ApiResponse::internal_error("failed to create permission")
     })?;
-    let created = permission_repository::insert(&mut conn.context(), code, description)
+    let created = permission_repository::save(
+        &mut conn.context(),
+        &entity::Permission::new(code.to_owned(), description.map(str::to_owned)),
+    )
         .await
         .map_err(|error| match error {
             tlab::Error::Conflict(_) => ApiResponse::conflict("permission already exists"),
@@ -136,11 +144,13 @@ async fn list_permissions(
         tracing::error!(?error, "Failed to connect to database");
         ApiResponse::internal_error("failed to list permissions")
     })?;
-    let paging = permission_repository::find(
+    let paging = permission_repository::search(
         &mut conn.context(),
-        query.code.as_deref(),
-        i64::from(page_size),
-        i64::from(page - 1) * i64::from(page_size),
+        &PermissionSearchCriteria {
+            code: query.code.as_deref(),
+            limit: i64::from(page_size),
+            offset: i64::from(page - 1) * i64::from(page_size),
+        },
     )
     .await
     .map_err(|error| {
