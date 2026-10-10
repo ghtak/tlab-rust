@@ -2,6 +2,9 @@ import { expect, test } from "@playwright/test";
 
 test("퍼미션 코드를 검색하면 목록이 바뀐다", async ({ page }) => {
 	// 보호된 페이지에 진입할 수 있도록 현재 사용자 응답을 준비한다.
+	await page.route("**/api/v1/auth/verify", (route) =>
+		route.fulfill({ json: {} }),
+	);
 	await page.route("**/api/v1/auth/me", (route) =>
 		route.fulfill({
 			json: {
@@ -50,6 +53,9 @@ test("퍼미션 코드를 검색하면 목록이 바뀐다", async ({ page }) =>
 });
 
 test("권한이 없으면 메뉴와 바로가기를 숨기고 직접 접근을 차단한다", async ({ page }) => {
+	await page.route("**/api/v1/auth/verify", (route) =>
+		route.fulfill({ json: {} }),
+	);
 	await page.route("**/api/v1/auth/me", (route) =>
 		route.fulfill({
 			json: {

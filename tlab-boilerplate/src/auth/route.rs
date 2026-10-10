@@ -34,6 +34,7 @@ pub fn router() -> axum::Router<Arc<AppContainer>> {
         .route("/api/v1/auth/refresh", post(refresh_token))
         .route("/api/v1/auth/logout", post(logout))
         .route("/api/v1/auth/me", get(me))
+        .route("/api/v1/auth/verify", get(verify))
         .merge(google_oauth2::router())
         .merge(permissions::router())
         .merge(roles::router())
@@ -247,6 +248,10 @@ async fn me(
             permissions: permissions.into_iter().map(|p| p.code).collect(),
         }),
     ))
+}
+
+async fn verify(_: AccessClaims) -> ApiResponse<()> {
+    ApiResponse::ok()
 }
 
 #[cfg(test)]

@@ -2,6 +2,17 @@ import { HTTPError } from "ky";
 import { api } from "../../../api";
 import type { CurrentUser } from "../types";
 
+export async function verifyAuth(): Promise<boolean> {
+	try {
+		await api.get("auth/verify", { cache: "no-store" });
+		return true;
+	} catch (error) {
+		if (error instanceof HTTPError && error.response.status === 401)
+			return false;
+		throw error;
+	}
+}
+
 export async function getCurrentUser(): Promise<CurrentUser | null> {
 	try {
 		const response = await api.get("auth/me").json<{ data: CurrentUser }>();
