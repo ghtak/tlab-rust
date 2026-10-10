@@ -3,4 +3,5 @@ export type CurrentUser = {
 	name: string;
 	email: string;
 	status: string;
+	permissions: string[];
 };

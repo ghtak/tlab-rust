@@ -179,7 +179,7 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 						{items.map((permission) => {
 							const protectedPermission =
 								initial.role.code === "admin" &&
-								permission.code === "user:manage" &&
+								permission.code === "access:manage" &&
 								saved.has(permission.id);
 							return (
 								<div

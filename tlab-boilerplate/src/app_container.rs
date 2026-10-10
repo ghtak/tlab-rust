@@ -29,10 +29,10 @@ impl AppContainer {
         Ok(Self {
             config: config.clone(),
             http: tlab::http::Server::new(config.http.clone()),
-            database,
+            database: database.clone(),
             password_hasher,
             jwt_codec,
-            rbac_service: Arc::new(crate::auth::service::RbacService {}),
+            rbac_service: Arc::new(crate::auth::service::RbacService::new(database.clone())),
             token_service,
         })
     }

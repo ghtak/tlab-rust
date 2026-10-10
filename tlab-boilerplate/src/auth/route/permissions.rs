@@ -33,7 +33,13 @@ async fn delete_permission(
     claims: AccessClaims,
     Path(id): Path<i64>,
 ) -> ApiResult<()> {
-    permission::require(&container, &claims, permission::USER_MANAGE).await?;
+    permission::require(
+        &container,
+        &claims,
+        permission::ACCESS_MANAGE,
+        permission::PermissionCheckStrategy::Direct,
+    )
+    .await?;
 
     let mut conn = container.database.conn().await.map_err(|error| {
         tracing::error!(?error, "Failed to connect to database");
@@ -49,6 +55,7 @@ async fn delete_permission(
     if !deleted {
         return Err(ApiResponse::not_found("permission not found"));
     }
+    container.rbac_service.clear_cache().await;
     Ok(ApiResponse::ok())
 }
 
@@ -80,7 +87,13 @@ async fn create_permission(
     claims: AccessClaims,
     axum::Json(request): axum::Json<CreatePermissionRequest>,
 ) -> ApiResult<PermissionResponse> {
-    permission::require(&container, &claims, permission::USER_MANAGE).await?;
+    permission::require(
+        &container,
+        &claims,
+        permission::ACCESS_MANAGE,
+        permission::PermissionCheckStrategy::Direct,
+    )
+    .await?;
 
     let code = request.code.trim();
     if code.is_empty() || code.chars().count() > 100 {
@@ -132,7 +145,13 @@ async fn list_permissions(
     claims: AccessClaims,
     Query(query): Query<ListPermissionsQuery>,
 ) -> ApiResult<PermissionListResponse> {
-    permission::require(&container, &claims, permission::USER_MANAGE).await?;
+    permission::require(
+        &container,
+        &claims,
+        permission::ACCESS_MANAGE,
+        permission::PermissionCheckStrategy::Direct,
+    )
+    .await?;
 
     let page = query.page.unwrap_or(1);
     let page_size = query.page_size.unwrap_or(20);
@@ -424,7 +443,7 @@ mod tests {
             .map(|item| item["code"].as_str().unwrap())
             .collect();
         assert!(codes.windows(2).all(|pair| pair[0] <= pair[1]));
-        assert!(codes.contains(&"user:manage"));
+        assert!(codes.contains(&"access:manage"));
         assert!(permissions.iter().all(|item| item["id"].is_i64()));
         assert!(
             permissions
@@ -467,7 +486,7 @@ mod tests {
             serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
                 .unwrap();
         assert_eq!(body["data"]["total"], 1);
-        assert_eq!(body["data"]["items"][0]["code"], "user:manage");
+        assert_eq!(body["data"]["items"][0]["code"], "access:manage");
 
         let response = app
             .clone()

@@ -41,9 +41,9 @@ test("퍼미션 코드를 검색하면 목록이 바뀐다", async ({ page }) =>
 
 	await page
 		.getByRole("searchbox", { name: "퍼미션 코드 검색" })
-		.fill("user:manage");
+		.fill("access:manage");
 	await page.getByRole("button", { name: "검색" }).click();
 
-	await expect(page.getByRole("cell", { name: "user:manage" })).toBeVisible();
+	await expect(page.getByRole("cell", { name: "access:manage" })).toBeVisible();
 	await expect(page.getByRole("cell", { name: "role:read" })).toHaveCount(0);
 });

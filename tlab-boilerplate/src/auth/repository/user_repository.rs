@@ -40,6 +40,15 @@ impl UserAccountRow {
     }
 }
 
+#[derive(sqlx::FromRow)]
+struct UserAccountWithPermissionRow {
+    #[sqlx(flatten)]
+    account: UserAccountRow,
+    permission_id: Option<i64>,
+    permission_code: Option<String>,
+    permission_description: Option<String>,
+}
+
 #[derive(sqlx::FromRow, serde::Deserialize)]
 struct UserIdentityRow {
     id: i64,
@@ -492,7 +501,6 @@ pub async fn find_user_by_email(
     assemble_user(rows)
 }
 
-
 pub async fn find_all_roles_by_id(
     context: &mut AppDBCtx<'_>,
     user_account_id: i64,
@@ -552,7 +560,6 @@ pub async fn replace_roles(
     }
     Ok(())
 }
-
 
 pub async fn save_user_account(
     context: &mut AppDBCtx<'_>,
@@ -621,6 +628,49 @@ pub async fn find_user_account_by_id(
     .map_err(sqlxdb::postgres::map_error)?;
 
     row.map(UserAccountRow::into_entity).transpose()
+}
+
+pub async fn find_user_account_with_permissions_by_id(
+    context: &mut AppDBCtx<'_>,
+    user_account_id: i64,
+) -> tlab::Result<Option<(entity::UserAccount, Vec<entity::Permission>)>> {
+    let rows = sqlx::query_as::<_, UserAccountWithPermissionRow>(
+        r#"SELECT account.id, account.name, account.email, account.status,
+            account.created_at, account.updated_at,
+            account.create_by, account.update_by,
+            p.id AS permission_id, p.code AS permission_code,
+            p.description AS permission_description
+        FROM tlab_user_account AS account
+        LEFT JOIN tlab_user_role AS ur ON ur.user_account_id = account.id
+        LEFT JOIN tlab_role_permission AS rp ON rp.role_id = ur.role_id
+        LEFT JOIN tlab_permission AS p ON p.id = rp.permission_id
+        WHERE account.id = $1
+        GROUP BY account.id, p.id, p.code, p.description
+        ORDER BY p.code ASC"#,
+    )
+    .bind(user_account_id)
+    .fetch_all(context.backend())
+    .await
+    .map_err(sqlxdb::postgres::map_error)?;
+
+    let Some(first) = rows.first() else {
+        return Ok(None);
+    };
+    let account = first.account.clone().into_entity()?;
+    let permissions = rows
+        .into_iter()
+        .filter_map(|row| {
+            let id = row.permission_id?;
+            Some(entity::Permission {
+                id,
+                code: row
+                    .permission_code
+                    .expect("permission code for permission id"),
+                description: row.permission_description,
+            })
+        })
+        .collect();
+    Ok(Some((account, permissions)))
 }
 
 pub async fn find_user_account_by_id_for_update(
@@ -746,6 +796,76 @@ pub async fn delete_user_credential_by_user_identity_id(
 mod tests {
     use super::*;
     use crate::test_db;
+
+    #[tokio::test]
+    async fn finds_user_account_with_distinct_permissions() {
+        let database = test_db::connect().await;
+        let mut tx = database.tx().await.unwrap();
+        let suffix = uuid::Uuid::new_v4().simple().to_string();
+        let account = save_user_account(
+            &mut tx.context(),
+            &entity::UserAccount::new(
+                "Alice".into(),
+                test_db::unique_email("permissions"),
+                entity::UserStatus::Active,
+            ),
+        )
+        .await
+        .unwrap();
+
+        let without_roles = find_user_account_with_permissions_by_id(&mut tx.context(), account.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(without_roles.0.id, account.id);
+        assert!(without_roles.1.is_empty());
+
+        let permission_id: i64 = sqlx::query_scalar(
+            "INSERT INTO tlab_permission (code, description) VALUES ($1, 'shared') RETURNING id",
+        )
+        .bind(format!("test:permission:{suffix}"))
+        .fetch_one(tx.context().backend())
+        .await
+        .unwrap();
+        for role_number in 1..=2 {
+            let role_id: i64 =
+                sqlx::query_scalar("INSERT INTO tlab_role (code) VALUES ($1) RETURNING id")
+                    .bind(format!("test-role-{role_number}-{suffix}"))
+                    .fetch_one(tx.context().backend())
+                    .await
+                    .unwrap();
+            sqlx::query("INSERT INTO tlab_user_role (user_account_id, role_id) VALUES ($1, $2)")
+                .bind(account.id)
+                .bind(role_id)
+                .execute(tx.context().backend())
+                .await
+                .unwrap();
+            sqlx::query(
+                "INSERT INTO tlab_role_permission (role_id, permission_id) VALUES ($1, $2)",
+            )
+            .bind(role_id)
+            .bind(permission_id)
+            .execute(tx.context().backend())
+            .await
+            .unwrap();
+        }
+
+        let found = find_user_account_with_permissions_by_id(&mut tx.context(), account.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(found.0.email, account.email);
+        assert_eq!(found.1.len(), 1);
+        assert_eq!(found.1[0].id, permission_id);
+        assert_eq!(found.1[0].description.as_deref(), Some("shared"));
+        assert!(
+            find_user_account_with_permissions_by_id(&mut tx.context(), i64::MAX)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        tx.rollback().await.unwrap();
+    }
 
     #[tokio::test]
     async fn finds_assigned_roles() {
@@ -881,7 +1001,9 @@ mod tests {
         .await
         .unwrap();
         credential.password_hash = "updated-hash".into();
-        let credential = save_user_credential(&mut context, &credential).await.unwrap();
+        let credential = save_user_credential(&mut context, &credential)
+            .await
+            .unwrap();
         assert_eq!(credential.password_hash, "updated-hash");
 
         let user = find_user_by_email(&mut context, &email)
@@ -900,7 +1022,12 @@ mod tests {
                 .email,
             email
         );
-        assert!(find_user_by_email(&mut context, &suffix).await.unwrap().is_none());
+        assert!(
+            find_user_by_email(&mut context, &suffix)
+                .await
+                .unwrap()
+                .is_none()
+        );
         assert!(
             find_user_by_email(&mut context, "missing@example.com")
                 .await
@@ -928,18 +1055,26 @@ mod tests {
             assert_eq!(result.items.len() as i64, expected);
         }
 
-        assert!(delete_user_credential_by_user_identity_id(&mut context, identity.id)
-            .await
-            .unwrap());
-        assert!(delete_user_identity_by_id(&mut context, identity.id)
-            .await
-            .unwrap());
-        assert!(!delete_user_credential_by_user_identity_id(&mut context, identity.id)
-            .await
-            .unwrap());
-        assert!(delete_user_account_by_id(&mut context, account.id)
-            .await
-            .unwrap());
+        assert!(
+            delete_user_credential_by_user_identity_id(&mut context, identity.id)
+                .await
+                .unwrap()
+        );
+        assert!(
+            delete_user_identity_by_id(&mut context, identity.id)
+                .await
+                .unwrap()
+        );
+        assert!(
+            !delete_user_credential_by_user_identity_id(&mut context, identity.id)
+                .await
+                .unwrap()
+        );
+        assert!(
+            delete_user_account_by_id(&mut context, account.id)
+                .await
+                .unwrap()
+        );
 
         drop(context);
         tx.rollback().await.unwrap();

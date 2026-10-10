@@ -43,7 +43,13 @@ async fn set_user_status(
     Path(id): Path<i64>,
     axum::Json(request): axum::Json<SetUserStatusRequest>,
 ) -> ApiResult<()> {
-    permission::require(&container, &claims, permission::USER_MANAGE).await?;
+    permission::require(
+        &container,
+        &claims,
+        permission::ACCESS_MANAGE,
+        permission::PermissionCheckStrategy::Direct,
+    )
+    .await?;
     let status = request
         .status
         .parse::<UserStatus>()
@@ -89,7 +95,13 @@ async fn list_user_roles(
     claims: AccessClaims,
     Path(id): Path<i64>,
 ) -> ApiResult<UserRolesResponse> {
-    permission::require(&container, &claims, permission::USER_MANAGE).await?;
+    permission::require(
+        &container,
+        &claims,
+        permission::ACCESS_MANAGE,
+        permission::PermissionCheckStrategy::Direct,
+    )
+    .await?;
 
     let mut conn = container.database.conn().await.map_err(|error| {
         tracing::error!(?error, "Failed to connect to database");
@@ -130,7 +142,13 @@ async fn set_user_roles(
     Path(id): Path<i64>,
     axum::Json(request): axum::Json<SetUserRolesRequest>,
 ) -> ApiResult<()> {
-    permission::require(&container, &claims, permission::USER_MANAGE).await?;
+    permission::require(
+        &container,
+        &claims,
+        permission::ACCESS_MANAGE,
+        permission::PermissionCheckStrategy::Direct,
+    )
+    .await?;
 
     if request.role_ids.iter().any(|id| *id <= 0)
         || request
@@ -198,7 +216,13 @@ async fn list_users(
     claims: AccessClaims,
     Query(query): Query<ListUsersQuery>,
 ) -> ApiResult<UserListResponse> {
-    permission::require(&container, &claims, permission::USER_MANAGE).await?;
+    permission::require(
+        &container,
+        &claims,
+        permission::ACCESS_MANAGE,
+        permission::PermissionCheckStrategy::Direct,
+    )
+    .await?;
 
     let page = query.page.unwrap_or(1);
     let page_size = query.page_size.unwrap_or(20);

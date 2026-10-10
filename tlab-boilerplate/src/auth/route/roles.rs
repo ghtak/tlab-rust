@@ -42,7 +42,13 @@ async fn list_role_permissions(
     claims: AccessClaims,
     Path(id): Path<i64>,
 ) -> ApiResult<RolePermissionsResponse> {
-    permission::require(&container, &claims, permission::USER_MANAGE).await?;
+    permission::require(
+        &container,
+        &claims,
+        permission::ACCESS_MANAGE,
+        permission::PermissionCheckStrategy::Direct,
+    )
+    .await?;
 
     let mut conn = container.database.conn().await.map_err(|error| {
         tracing::error!(?error, "Failed to connect to database");
@@ -80,7 +86,13 @@ async fn set_role_permissions(
     Path(id): Path<i64>,
     axum::Json(request): axum::Json<SetRolePermissionsRequest>,
 ) -> ApiResult<()> {
-    permission::require(&container, &claims, permission::USER_MANAGE).await?;
+    permission::require(
+        &container,
+        &claims,
+        permission::ACCESS_MANAGE,
+        permission::PermissionCheckStrategy::Direct,
+    )
+    .await?;
 
     if request.permission_ids.iter().any(|id| *id <= 0)
         || request
@@ -113,6 +125,7 @@ async fn set_role_permissions(
                 ApiResponse::internal_error("failed to set role permissions")
             }
         })?;
+    container.rbac_service.invalidate_role(id).await;
     Ok(ApiResponse::ok())
 }
 
@@ -146,7 +159,13 @@ async fn create_role(
     claims: AccessClaims,
     axum::Json(request): axum::Json<CreateRoleRequest>,
 ) -> ApiResult<RoleResponse> {
-    permission::require(&container, &claims, permission::USER_MANAGE).await?;
+    permission::require(
+        &container,
+        &claims,
+        permission::ACCESS_MANAGE,
+        permission::PermissionCheckStrategy::Direct,
+    )
+    .await?;
 
     let code = request.code.trim();
     if code.is_empty() || code.chars().count() > 50 {
@@ -197,7 +216,13 @@ async fn list_roles(
     claims: AccessClaims,
     Query(query): Query<ListRolesQuery>,
 ) -> ApiResult<RoleListResponse> {
-    permission::require(&container, &claims, permission::USER_MANAGE).await?;
+    permission::require(
+        &container,
+        &claims,
+        permission::ACCESS_MANAGE,
+        permission::PermissionCheckStrategy::Direct,
+    )
+    .await?;
 
     let page = query.page.unwrap_or(1);
     let page_size = query.page_size.unwrap_or(20);
@@ -243,7 +268,13 @@ async fn delete_role(
     claims: AccessClaims,
     Path(id): Path<i64>,
 ) -> ApiResult<()> {
-    permission::require(&container, &claims, permission::USER_MANAGE).await?;
+    permission::require(
+        &container,
+        &claims,
+        permission::ACCESS_MANAGE,
+        permission::PermissionCheckStrategy::Direct,
+    )
+    .await?;
 
     let mut conn = container.database.conn().await.map_err(|error| {
         tracing::error!(?error, "Failed to connect to database");
@@ -258,6 +289,7 @@ async fn delete_role(
     if !deleted {
         return Err(ApiResponse::conflict("role cannot be deleted"));
     }
+    container.rbac_service.invalidate_role(id).await;
     Ok(ApiResponse::ok())
 }
 
@@ -303,8 +335,8 @@ mod tests {
             .fetch_one(conn.context().backend())
             .await
             .unwrap();
-        let user_manage_id: i64 =
-            sqlx::query_scalar("SELECT id FROM tlab_permission WHERE code = 'user:manage'")
+        let ACCESS_MANAGE_id: i64 =
+            sqlx::query_scalar("SELECT id FROM tlab_permission WHERE code = 'access:manage'")
                 .fetch_one(conn.context().backend())
                 .await
                 .unwrap();
@@ -333,7 +365,7 @@ mod tests {
 
         let response = app
             .clone()
-            .oneshot(patch(role_id, vec![file_manage_id, user_manage_id]))
+            .oneshot(patch(role_id, vec![file_manage_id, ACCESS_MANAGE_id]))
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
@@ -347,7 +379,7 @@ mod tests {
 
         let response = app
             .clone()
-            .oneshot(patch(role_id, vec![user_manage_id]))
+            .oneshot(patch(role_id, vec![ACCESS_MANAGE_id]))
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
@@ -361,7 +393,7 @@ mod tests {
         let body: serde_json::Value =
             serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
                 .unwrap();
-        assert_eq!(body["data"]["permissions"][0]["id"], user_manage_id);
+        assert_eq!(body["data"]["permissions"][0]["id"], ACCESS_MANAGE_id);
 
         let response = app.clone().oneshot(patch(role_id, vec![])).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
@@ -380,10 +412,10 @@ mod tests {
         let body: serde_json::Value =
             serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
                 .unwrap();
-        assert_eq!(body["error"], "admin must retain user:manage");
+        assert_eq!(body["error"], "admin must retain access:manage");
         let response = app
             .clone()
-            .oneshot(patch(role_id, vec![user_manage_id, user_manage_id]))
+            .oneshot(patch(role_id, vec![ACCESS_MANAGE_id, ACCESS_MANAGE_id]))
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);

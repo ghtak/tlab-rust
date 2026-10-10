@@ -36,7 +36,7 @@ impl SetRolePermissionsUsecase {
         if permissions.len() != command.permission_ids.len() {
             return Err(tlab::Error::NotFound("permission".into()));
         }
-        RbacService.validate_role_permission_change(&role, &permissions)?;
+        RbacService::validate_role_permission_change(&role, &permissions)?;
 
         role_repository::replace_permissions(&mut tx.context(), role.id, &command.permission_ids)
             .await?;

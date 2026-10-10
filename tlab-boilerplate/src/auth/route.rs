@@ -60,7 +60,13 @@ async fn create_managed_user(
     claims: AccessClaims,
     axum::Json(request): axum::Json<CreateManagedUserRequest>,
 ) -> ApiResult<CreateManagedUserResponse> {
-    permission::require(&container, &claims, permission::USER_MANAGE).await?;
+    permission::require(
+        &container,
+        &claims,
+        permission::ACCESS_MANAGE,
+        permission::PermissionCheckStrategy::Direct,
+    )
+    .await?;
 
     let command = CreateManagedUserCommand {
         name: request.name,
@@ -209,6 +215,7 @@ struct MeResponse {
     name: String,
     email: String,
     status: String,
+    permissions: Vec<String>,
 }
 
 async fn me(
@@ -219,20 +226,25 @@ async fn me(
         tracing::error!(?error, "Failed to connect to database");
         ApiResponse::internal_error("failed to load user")
     })?;
-    let user = user_repository::find_user_account_by_id(&mut conn.context(), claims.user_account_id()?)
-        .await
-        .map_err(|error| {
-            tracing::error!(?error, "Failed to load user");
-            ApiResponse::internal_error("failed to load user")
-        })?
-        .ok_or_else(|| ApiResponse::unauthorized("invalid token"))?;
+    let (account, permissions) = user_repository::find_user_account_with_permissions_by_id(
+        &mut conn.context(),
+        claims.user_account_id()?,
+    )
+    .await
+    .map_err(|error| {
+        tracing::error!(?error, "Failed to load user");
+        ApiResponse::internal_error("failed to load user")
+    })?
+    .ok_or_else(|| ApiResponse::unauthorized("invalid token"))?;
+
     Ok((
         [(header::CACHE_CONTROL, "no-store")],
         ApiResponse::data(MeResponse {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            status: user.status.as_str().to_owned(),
+            id: account.id,
+            name: account.name,
+            email: account.email,
+            status: account.status.as_str().to_owned(),
+            permissions: permissions.into_iter().map(|p| p.code).collect(),
         }),
     ))
 }

@@ -48,7 +48,7 @@ ON CONFLICT (code) DO NOTHING;
 
 INSERT INTO tlab_permission (code, description)
 VALUES
-    ('user:manage', '사용자 관리')
+    ('access:manage', '접근 제어')
     , ('file:manage', '파일 관리')
 ON CONFLICT (code) DO NOTHING;
 
@@ -56,7 +56,7 @@ INSERT INTO tlab_role_permission (role_id, permission_id)
 SELECT role.id, permission.id
 FROM tlab_role AS role
 JOIN tlab_permission AS permission
-    ON permission.code in ('user:manage', 'file:manage')
+    ON permission.code in ('access:manage', 'file:manage')
 WHERE role.code = 'admin'
 -- UNION ALL
 -- SELECT role.id, permission.id

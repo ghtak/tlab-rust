@@ -151,7 +151,7 @@ return useMutation({
 
 ## 백엔드의 `/me` 변경
 
-기존 `/me`는 `user:manage` 권한을 요구하고 JWT 내용을 반환했다. 일반 사용자는 로그인해도 권한이 없어 `403`을 받으므로 UI의 로그인 상태 확인에 사용할 수 없었다.
+기존 `/me`는 `access:manage` 권한을 요구하고 JWT 내용을 반환했다. 일반 사용자는 로그인해도 권한이 없어 `403`을 받으므로 UI의 로그인 상태 확인에 사용할 수 없었다.
 
 이제 [`auth/route.rs`](../../../tlab-boilerplate/src/auth/route.rs)의 `/me`는 인증된 사용자의 ID로 DB를 조회하고 `id`, `name`, `email`, `status`를 반환한다. 사용자 조회 코드는 [`user_repository.rs`](../../../tlab-boilerplate/src/auth/repository/user_repository.rs)에 추가했다. 응답에는 `Cache-Control: no-store`를 붙여 브라우저가 사용자 정보를 HTTP 캐시에 보관하지 않도록 했다.
 

@@ -37,7 +37,7 @@ impl SetUserRolesUsecase {
         if roles.len() != command.role_ids.len() {
             return Err(tlab::Error::NotFound("role".into()));
         }
-        RbacService.validate_user_role_change(&user, &roles)?;
+        RbacService::validate_user_role_change(&user, &roles)?;
 
         user_repository::replace_roles(&mut tx.context(), user.id, &command.role_ids).await?;
         tx.commit().await?;
