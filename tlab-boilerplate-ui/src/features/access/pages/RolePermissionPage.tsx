@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { HTTPError } from "ky";
 import { useEffect, useState } from "react";
 import { Button } from "../../../components/ui/button";
@@ -14,6 +14,7 @@ import {
 	PaginationNext,
 	PaginationPrevious,
 } from "../../../components/ui/pagination";
+import { currentUserQuery } from "../../auth/services/queries";
 import { changeRolePermissions } from "../services/api";
 import { permissionsQuery, rolePermissionsQuery } from "../services/queries";
 import type { Permission, RolePermissions } from "../types";
@@ -46,6 +47,7 @@ export function RolePermissionPage({ roleId }: { roleId: number }) {
 function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
+	const router = useRouter();
 	const [inputCode, setInputCode] = useState("");
 	const [code, setCode] = useState("");
 	const [page, setPage] = useState(1);
@@ -83,7 +85,9 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 				queryClient.invalidateQueries({
 					queryKey: ["rolePermissions", initial.role.id],
 				}),
+				queryClient.invalidateQueries({ queryKey: currentUserQuery.queryKey }),
 			]);
+			await router.invalidate();
 			void navigate({ to: "/roles" });
 		},
 	});

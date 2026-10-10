@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { HTTPError } from "ky";
 import { useEffect, useState } from "react";
 import { Button } from "../../../components/ui/button";
@@ -14,6 +14,7 @@ import {
 	PaginationNext,
 	PaginationPrevious,
 } from "../../../components/ui/pagination";
+import { currentUserQuery } from "../../auth/services/queries";
 import { changeUserRoles } from "../services/api";
 import { rolesQuery, userRolesQuery } from "../services/queries";
 import type { Role, UserRoles } from "../types";
@@ -44,6 +45,7 @@ export function UserRolePage({ userId }: { userId: number }) {
 function UserRoleEditor({ initial }: { initial: UserRoles }) {
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
+	const router = useRouter();
 	const [inputCode, setInputCode] = useState("");
 	const [code, setCode] = useState("");
 	const [page, setPage] = useState(1);
@@ -77,7 +79,9 @@ function UserRoleEditor({ initial }: { initial: UserRoles }) {
 				queryClient.invalidateQueries({
 					queryKey: ["userRoles", initial.user.id],
 				}),
+				queryClient.invalidateQueries({ queryKey: currentUserQuery.queryKey }),
 			]);
+			await router.invalidate();
 			void navigate({ to: "/users" });
 		},
 	});

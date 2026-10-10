@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppIndexRouteImport } from './routes/_app.index'
+import { Route as AppForbiddenRouteImport } from './routes/_app.forbidden'
 import { Route as AppPermissionsRouteImport } from './routes/_app.permissions'
 import { Route as AppRolesRouteImport } from './routes/_app.roles'
 import { Route as AppUsersRouteImport } from './routes/_app.users'
@@ -32,6 +33,11 @@ const LoginRoute = LoginRouteImport.update({
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppForbiddenRoute = AppForbiddenRouteImport.update({
+  id: '/forbidden',
+  path: '/forbidden',
   getParentRoute: () => AppRoute,
 } as any)
 const AppPermissionsRoute = AppPermissionsRouteImport.update({
@@ -74,6 +80,7 @@ const AppUsersUserIdRolesRoute = AppUsersUserIdRolesRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
+  '/forbidden': typeof AppForbiddenRoute
   '/permissions': typeof AppPermissionsRoute
   '/roles': typeof AppRolesRouteWithChildren
   '/users': typeof AppUsersRouteWithChildren
@@ -84,6 +91,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/forbidden': typeof AppForbiddenRoute
   '/permissions': typeof AppPermissionsRoute
   '/': typeof AppIndexRoute
   '/roles': typeof AppRolesIndexRoute
@@ -95,6 +103,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/_app/forbidden': typeof AppForbiddenRoute
   '/_app/permissions': typeof AppPermissionsRoute
   '/_app/roles': typeof AppRolesRouteWithChildren
   '/_app/users': typeof AppUsersRouteWithChildren
@@ -109,6 +118,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/forbidden'
     | '/permissions'
     | '/roles'
     | '/users'
@@ -119,6 +129,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
+    | '/forbidden'
     | '/permissions'
     | '/'
     | '/roles'
@@ -129,6 +140,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_app'
     | '/login'
+    | '/_app/forbidden'
     | '/_app/permissions'
     | '/_app/roles'
     | '/_app/users'
@@ -165,6 +177,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/forbidden': {
+      id: '/_app/forbidden'
+      path: '/forbidden'
+      fullPath: '/forbidden'
+      preLoaderRoute: typeof AppForbiddenRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/permissions': {
@@ -248,6 +267,7 @@ const AppUsersRouteWithChildren = AppUsersRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
+  AppForbiddenRoute: typeof AppForbiddenRoute
   AppPermissionsRoute: typeof AppPermissionsRoute
   AppRolesRoute: typeof AppRolesRouteWithChildren
   AppUsersRoute: typeof AppUsersRouteWithChildren
@@ -255,6 +275,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppForbiddenRoute: AppForbiddenRoute,
   AppPermissionsRoute: AppPermissionsRoute,
   AppRolesRoute: AppRolesRouteWithChildren,
   AppUsersRoute: AppUsersRouteWithChildren,

@@ -35,3 +35,7 @@ npm i zod
 npm i tailwindcss @tailwindcss/vite
 npx shadcn@latest init -t vite
 ```
+
+## 권한 기반 메뉴
+
+사이드메뉴와 대시보드 바로가기의 표시 조건, 직접 URL 접근 검사, 새 화면 추가 방법은 [UI 메뉴 표시와 화면 접근 권한](docs/explain/permission-visibility.md)을 참고한다.
