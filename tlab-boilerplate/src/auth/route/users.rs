@@ -612,10 +612,10 @@ mod tests {
             body["data"]["items"][0]["roles"],
             serde_json::json!(["admin", "sales"])
         );
-        assert_eq!(
-            body["data"]["items"][0]["providers"],
-            serde_json::json!(["google", "managed"])
-        );
+        let providers = body["data"]["items"][0]["providers"].as_array().unwrap();
+        assert_eq!(providers.len(), 2);
+        assert!(providers.contains(&serde_json::json!("google")));
+        assert!(providers.contains(&serde_json::json!("managed")));
         assert!(
             body["data"]["items"][0]["latest_login_at"]
                 .as_str()

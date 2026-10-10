@@ -335,7 +335,7 @@ mod tests {
             .fetch_one(conn.context().backend())
             .await
             .unwrap();
-        let ACCESS_MANAGE_id: i64 =
+        let access_manage_id: i64 =
             sqlx::query_scalar("SELECT id FROM tlab_permission WHERE code = 'access:manage'")
                 .fetch_one(conn.context().backend())
                 .await
@@ -365,7 +365,7 @@ mod tests {
 
         let response = app
             .clone()
-            .oneshot(patch(role_id, vec![file_manage_id, ACCESS_MANAGE_id]))
+            .oneshot(patch(role_id, vec![file_manage_id, access_manage_id]))
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
@@ -379,7 +379,7 @@ mod tests {
 
         let response = app
             .clone()
-            .oneshot(patch(role_id, vec![ACCESS_MANAGE_id]))
+            .oneshot(patch(role_id, vec![access_manage_id]))
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
@@ -393,7 +393,7 @@ mod tests {
         let body: serde_json::Value =
             serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
                 .unwrap();
-        assert_eq!(body["data"]["permissions"][0]["id"], ACCESS_MANAGE_id);
+        assert_eq!(body["data"]["permissions"][0]["id"], access_manage_id);
 
         let response = app.clone().oneshot(patch(role_id, vec![])).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
@@ -415,7 +415,7 @@ mod tests {
         assert_eq!(body["error"], "admin must retain access:manage");
         let response = app
             .clone()
-            .oneshot(patch(role_id, vec![ACCESS_MANAGE_id, ACCESS_MANAGE_id]))
+            .oneshot(patch(role_id, vec![access_manage_id, access_manage_id]))
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);

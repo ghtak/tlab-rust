@@ -100,26 +100,26 @@ pub async fn search(
 
 const PERMISSION_SELECT_SQL: &str = "SELECT id, code, description FROM tlab_permission WHERE id = ANY";
 
-pub async fn find_all_by_ids(context: &mut AppDBCtx<'_>, ids: &[i64]) -> tlab::Result<Vec<entity::Permission>> {
-    let mut builder = AppQueryBuilder::new(PERMISSION_SELECT_SQL);
-    builder.push("(");
-    builder.push_bind(ids);
-    builder.push(")");
+// pub async fn find_all_by_ids(context: &mut AppDBCtx<'_>, ids: &[i64]) -> tlab::Result<Vec<entity::Permission>> {
+//     let mut builder = AppQueryBuilder::new(PERMISSION_SELECT_SQL);
+//     builder.push("(");
+//     builder.push_bind(ids);
+//     builder.push(")");
 
-    let rows: Vec<(i64, String, Option<String>)> = builder
-        .build_query_as()
-        .fetch_all(context.backend())
-        .await
-        .map_err(sqlxdb::postgres::map_error)?;
-    Ok(rows
-        .into_iter()
-        .map(|(id, code, description)| entity::Permission {
-            id,
-            code,
-            description,
-        })
-        .collect())
-}
+//     let rows: Vec<(i64, String, Option<String>)> = builder
+//         .build_query_as()
+//         .fetch_all(context.backend())
+//         .await
+//         .map_err(sqlxdb::postgres::map_error)?;
+//     Ok(rows
+//         .into_iter()
+//         .map(|(id, code, description)| entity::Permission {
+//             id,
+//             code,
+//             description,
+//         })
+//         .collect())
+// }
 
 pub async fn find_all_by_ids_for_key_share(
     context: &mut AppDBCtx<'_>,

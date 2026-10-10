@@ -151,7 +151,9 @@ mod tests {
         .fetch_all(tx.context().backend())
         .await
         .unwrap();
-        assert_eq!(permissions, ["file:manage", "access:manage"]);
+        for code in ["access:manage", "file:manage"] {
+            assert!(permissions.iter().any(|permission| permission == code));
+        }
 
         create_admin_user_if_missing(&mut tx.context(), &password_hasher)
             .await

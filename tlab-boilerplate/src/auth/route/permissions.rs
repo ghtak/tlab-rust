@@ -474,7 +474,7 @@ mod tests {
         let response = app
             .clone()
             .oneshot(
-                Request::get("/api/v1/auth/permissions?code=USER&page_size=1")
+                Request::get("/api/v1/auth/permissions?code=ACCESS&page_size=1")
                     .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
                     .body(Body::empty())
                     .unwrap(),

@@ -121,7 +121,6 @@ struct UserRow {
     #[sqlx(flatten)]
     account: UserAccountRow,
     identities: sqlx::types::Json<Vec<UserIdentityRow>>,
-    credentials: sqlx::types::Json<Vec<UserCredentialRow>>,
     roles: sqlx::types::Json<Vec<RoleRow>>,
 }
 
@@ -134,12 +133,6 @@ impl UserRow {
             .into_iter()
             .map(|i| i.into_entity())
             .collect::<tlab::Result<Vec<_>>>()?;
-        let credentials = self
-            .credentials
-            .0
-            .into_iter()
-            .map(|c| c.into_entity())
-            .collect::<tlab::Result<Vec<_>>>()?;
         let roles = self
             .roles
             .0
@@ -150,7 +143,6 @@ impl UserRow {
         Ok(entity::User {
             account,
             identities,
-            credentials,
             roles,
         })
     }
@@ -244,25 +236,6 @@ pub async fn search(
         "#,
     );
 
-    // 2. credentials 서브쿼리
-    builder.push(
-        r#"
-            COALESCE((
-                SELECT json_agg(
-                    json_build_object(
-                        'user_identity_id', credential.user_identity_id,
-                        'provider', credential.provider,
-                        'password_hash', credential.password_hash,
-                        'password_changed_at', credential.password_changed_at
-                    )
-                )
-                FROM tlab_user_credential AS credential
-                JOIN tlab_user_identity AS identity ON identity.id = credential.user_identity_id
-                WHERE identity.user_account_id = account.id
-            ), '[]'::json ) AS credentials ,
-        "#,
-    );
-
     builder.push(
         r#"
             COALESCE((
@@ -350,12 +323,6 @@ struct UserFlatRow {
     identity_created_at: Option<chrono::DateTime<chrono::Utc>>,
     identity_last_login_at: Option<chrono::DateTime<chrono::Utc>>,
 
-    // Credential (LEFT JOIN 이므로 Nullable)
-    credential_user_identity_id: Option<i64>,
-    credential_provider: Option<String>,
-    credential_password_hash: Option<String>,
-    credential_password_changed_at: Option<chrono::DateTime<chrono::Utc>>,
-
     // Role (LEFT JOIN 이므로 Nullable)
     role_id: Option<i64>,
     role_code: Option<String>,
@@ -374,11 +341,6 @@ const USER_FLAT_SELECT: &str = r#"
             identity.created_at AS identity_created_at,
             identity.last_login_at AS identity_last_login_at,
 
-            credential.user_identity_id AS credential_user_identity_id,
-            credential.provider AS credential_provider,
-            credential.password_hash AS credential_password_hash,
-            credential.password_changed_at AS credential_password_changed_at,
-
             role.id AS role_id,
             role.code AS role_code,
             role.description AS role_description
@@ -386,8 +348,6 @@ const USER_FLAT_SELECT: &str = r#"
         FROM tlab_user_account AS account
         LEFT JOIN tlab_user_identity AS identity
                ON identity.user_account_id = account.id
-        LEFT JOIN tlab_user_credential AS credential
-               ON credential.user_identity_id = identity.id
         LEFT JOIN tlab_user_role AS user_role
                ON user_role.user_account_id = account.id
         LEFT JOIN tlab_role AS role
@@ -403,12 +363,10 @@ fn assemble_user(rows: Vec<UserFlatRow>) -> tlab::Result<Option<entity::User>> {
     let account = rows[0].account.clone().into_entity()?;
 
     let mut identities = Vec::new();
-    let mut credentials = Vec::new();
     let mut roles = Vec::new();
 
     // 중복 추가 방지용 Set (N x M Join에 따른 중복 제거)
     let mut seen_identity_ids = HashSet::new();
-    let mut seen_credential_keys = HashSet::new();
     let mut seen_role_ids = HashSet::new();
 
     // 2. Flat Rows 순회하며 Rust 메모리 상에서 조합
@@ -431,25 +389,6 @@ fn assemble_user(rows: Vec<UserFlatRow>) -> tlab::Result<Option<entity::User>> {
             }
         }
 
-        // Credential 수집
-        if let (Some(identity_id), Some(provider)) = (
-            row.credential_user_identity_id,
-            row.credential_provider.as_ref(),
-        ) {
-            let key = (identity_id, provider.clone());
-            if seen_credential_keys.insert(key) {
-                credentials.push(
-                    UserCredentialRow {
-                        user_identity_id: identity_id,
-                        provider: provider.clone(),
-                        password_hash: row.credential_password_hash.clone().unwrap(),
-                        password_changed_at: row.credential_password_changed_at.unwrap(),
-                    }
-                    .into_entity()?,
-                );
-            }
-        }
-
         if let Some(role_id) = row.role_id {
             if seen_role_ids.insert(role_id) {
                 // Role 수집
@@ -466,7 +405,6 @@ fn assemble_user(rows: Vec<UserFlatRow>) -> tlab::Result<Option<entity::User>> {
     Ok(Some(entity::User {
         account,
         identities,
-        credentials,
         roles,
     }))
 }
@@ -779,6 +717,22 @@ pub async fn save_user_credential(
     row.into_entity()
 }
 
+pub async fn find_user_credential_by_user_identity_id(
+    context: &mut AppDBCtx<'_>,
+    user_identity_id: i64,
+) -> tlab::Result<Option<entity::UserCredential>> {
+    let row = sqlx::query_as::<_, UserCredentialRow>(
+        "SELECT user_identity_id, provider, password_hash, password_changed_at \
+         FROM tlab_user_credential WHERE user_identity_id = $1",
+    )
+    .bind(user_identity_id)
+    .fetch_optional(context.backend())
+    .await
+    .map_err(sqlxdb::postgres::map_error)?;
+
+    row.map(UserCredentialRow::into_entity).transpose()
+}
+
 pub async fn delete_user_credential_by_user_identity_id(
     context: &mut AppDBCtx<'_>,
     user_identity_id: i64,
@@ -1012,7 +966,20 @@ mod tests {
             .unwrap();
         assert_eq!(user.account.id, account.id);
         assert_eq!(user.identities.len(), 1);
-        assert_eq!(user.credentials[0].password_hash, "updated-hash");
+        assert_eq!(
+            find_user_credential_by_user_identity_id(&mut context, identity_id)
+                .await
+                .unwrap()
+                .unwrap()
+                .password_hash,
+            "updated-hash"
+        );
+        assert!(
+            find_user_credential_by_user_identity_id(&mut context, i64::MAX)
+                .await
+                .unwrap()
+                .is_none()
+        );
         assert_eq!(
             find_user_by_id(&mut context, account.id)
                 .await

@@ -203,6 +203,5 @@ impl RefreshToken {
 pub struct User {
     pub account: UserAccount,
     pub identities: Vec<UserIdentity>,
-    pub credentials: Vec<UserCredential>,
     pub roles: Vec<Role>,
 }

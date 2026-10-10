@@ -5,8 +5,7 @@ use crate::{
     auth::{
         entity::{Provider, UserStatus},
         repository::user_repository,
-        service::TokenService,
-        usecase::{CreateSocialUserCommand, CreateSocialUserUsecase},
+        service::{SocialUserRegistration, SocialUserService, TokenService},
     },
 };
 
@@ -46,63 +45,40 @@ impl LoginGoogleUserUsecase {
         &self,
         claims: tlab::google_oauth2::GoogleIdTokenClaims,
     ) -> tlab::Result<tlab::jwt::TokenPair> {
-        let subject = claims.sub.clone();
-        let mut conn = self.app_db.conn().await?;
-        let identity =
-            user_repository::find_user_identity_by_provider_and_subject(&mut conn.context(), Provider::Google, &claims.sub)
-                .await?;
-        let (account, mut identity) = if let Some(identity) = identity {
-            let account =
-                user_repository::find_user_account_by_id(&mut conn.context(), identity.user_account_id)
-                    .await?
-                    .ok_or_else(|| {
-                        tlab::Error::IllegalState("social user account not found".into())
-                    })?;
-            drop(conn);
-            (account, identity)
-        } else {
-            drop(conn);
-            if !claims.email_verified {
-                return Err(tlab::Error::InvalidCredentials);
-            }
-            let email = claims
+        let registration = if claims.email_verified {
+            claims
                 .email
                 .filter(|email| !email.is_empty())
-                .ok_or(tlab::Error::InvalidCredentials)?;
-            let command = CreateSocialUserCommand {
-                name: claims
-                    .name
-                    .filter(|name| !name.is_empty())
-                    .unwrap_or_else(|| email.clone()),
-                email,
-                provider: Provider::Google,
-                provider_subject: claims.sub,
-            };
-            let account = CreateSocialUserUsecase::new(self.app_db.clone())
-                .execute(&command)
-                .await?;
-            let mut conn = self.app_db.conn().await?;
-            let identity = user_repository::find_user_identity_by_provider_and_subject(
-                &mut conn.context(),
-                Provider::Google,
-                &subject,
-            )
-            .await?
-            .ok_or_else(|| tlab::Error::IllegalState("social user identity not found".into()))?;
-            (account, identity)
+                .map(|email| SocialUserRegistration {
+                    name: claims
+                        .name
+                        .filter(|name| !name.is_empty())
+                        .unwrap_or_else(|| email.clone()),
+                    email,
+                })
+        } else {
+            None
         };
+        let mut tx = self.app_db.tx().await?;
+        let (account, mut identity) = SocialUserService::find_or_create(
+            &mut tx.context(),
+            Provider::Google,
+            &claims.sub,
+            registration,
+        )
+        .await?;
 
         if account.status != UserStatus::Active {
             return Err(tlab::Error::InvalidCredentials);
         }
 
-        let mut conn = self.app_db.conn().await?;
         let tokens = self
             .token_service
-            .issue_login_tokens(&mut conn.context(), account.id)
+            .issue_login_tokens(&mut tx.context(), account.id)
             .await?;
         identity.last_login_at = Some(chrono::Utc::now());
-        user_repository::save_user_identity(&mut conn.context(), &identity).await?;
+        user_repository::save_user_identity(&mut tx.context(), &identity).await?;
+        tx.commit().await?;
         Ok(tokens)
     }
 }
@@ -161,11 +137,14 @@ mod tests {
         }
 
         let mut conn = app.database.conn().await.unwrap();
-        let identity =
-            user_repository::find_user_identity_by_provider_and_subject(&mut conn.context(), Provider::Google, &subject)
-                .await
-                .unwrap()
-                .unwrap();
+        let identity = user_repository::find_user_identity_by_provider_and_subject(
+            &mut conn.context(),
+            Provider::Google,
+            &subject,
+        )
+        .await
+        .unwrap()
+        .unwrap();
         assert!(identity.last_login_at.is_some());
         let sessions = refresh_token_repository::find_all_by_user_account_id(
             &mut conn.context(),

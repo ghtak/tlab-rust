@@ -43,10 +43,11 @@ impl LoginManagedUserUsecase {
         &self,
         command: &LoginManagedUserCommand,
     ) -> tlab::Result<LoginManagedUserResult> {
-        let mut conn = self.app_db.conn().await?;
-        let user = user_repository::find_user_by_email(&mut conn.context(), &command.email).await?;
+        let mut tx = self.app_db.tx().await?;
+        let user = user_repository::find_user_by_email(&mut tx.context(), &command.email).await?;
 
         let Some(user) = user else {
+            drop(tx);
             let _ = self
                 .password_hasher
                 .verify(&command.password, DUMMY_LOGIN_HASH);
@@ -55,22 +56,25 @@ impl LoginManagedUserUsecase {
         let entity::User {
             account,
             identities,
-            credentials,
             ..
         } = user;
         let managed = identities
             .into_iter()
-            .find(|identity| identity.provider == Provider::Managed)
-            .and_then(|identity| {
-                credentials
-                    .into_iter()
-                    .find(|credential| {
-                        credential.provider == Provider::Managed
-                            && credential.user_identity_id == identity.id
-                    })
-                    .map(|credential| (identity, credential))
-            });
-        let Some((mut identity, credential)) = managed else {
+            .find(|identity| identity.provider == Provider::Managed);
+        let Some(mut identity) = managed else {
+            let _ = self
+                .password_hasher
+                .verify(&command.password, DUMMY_LOGIN_HASH);
+            return Err(tlab::Error::InvalidCredentials);
+        };
+        let credential = user_repository::find_user_credential_by_user_identity_id(
+            &mut tx.context(),
+            identity.id,
+        )
+        .await?;
+        let Some(credential) =
+            credential.filter(|credential| credential.provider == Provider::Managed)
+        else {
             let _ = self
                 .password_hasher
                 .verify(&command.password, DUMMY_LOGIN_HASH);
@@ -81,18 +85,16 @@ impl LoginManagedUserUsecase {
             return Err(tlab::Error::InvalidCredentials);
         }
 
-        self.password_hasher.verify(
-            &command.password,
-            &credential.password_hash,
-        )?;
+        self.password_hasher
+            .verify(&command.password, &credential.password_hash)?;
 
         let tokens = self
             .token_service
-            .issue_login_tokens(&mut conn.context(), account.id)
+            .issue_login_tokens(&mut tx.context(), account.id)
             .await?;
         identity.last_login_at = Some(chrono::Utc::now());
-        user_repository::save_user_identity(&mut conn.context(), &identity).await?;
-
+        user_repository::save_user_identity(&mut tx.context(), &identity).await?;
+        tx.commit().await?;
         Ok(LoginManagedUserResult { tokens })
     }
 }
@@ -339,6 +341,41 @@ mod tests {
             .await;
 
         assert!(matches!(result, Err(tlab::Error::InvalidCredentials)));
+    }
+
+    #[tokio::test]
+    async fn rejects_login_without_managed_credential() {
+        let app_db = test_db::connect().await;
+        let hasher = password_hasher();
+        let account = create_user(&app_db, &hasher).await;
+        let mut conn = app_db.conn().await.unwrap();
+        let identity_id = user_repository::find_user_by_email(&mut conn.context(), &account.email)
+            .await
+            .unwrap()
+            .unwrap()
+            .identities[0]
+            .id;
+        user_repository::delete_user_credential_by_user_identity_id(
+            &mut conn.context(),
+            identity_id,
+        )
+        .await
+        .unwrap();
+        drop(conn);
+
+        let result = LoginManagedUserUsecase::new(
+            app_db.clone(),
+            hasher,
+            Arc::new(TokenService::new(jwt_codec())),
+        )
+        .execute(&LoginManagedUserCommand {
+            email: account.email.clone(),
+            password: "correct password".into(),
+        })
+        .await;
+        assert!(matches!(result, Err(tlab::Error::InvalidCredentials)));
+
+        delete_user(&app_db, &account).await;
     }
 
     #[tokio::test]
