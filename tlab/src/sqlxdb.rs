@@ -55,7 +55,25 @@ pub struct Database<DB: sqlx::Database> {
     inner: sqlx::Pool<DB>,
 }
 
+/// Current state of one SQLx pool.
+#[derive(Debug, Clone, Copy, serde::Serialize)]
+pub struct PoolStatus {
+    pub max_connections: u32,
+    pub size: u32,
+    pub idle: usize,
+}
+
 impl<DB: sqlx::Database> Database<DB> {
+    /// Read connection counts without acquiring a connection.
+    pub fn pool_status(&self) -> PoolStatus {
+        let size = self.inner.size();
+        PoolStatus {
+            max_connections: self.inner.options().get_max_connections(),
+            size,
+            idle: self.inner.num_idle().min(size as usize),
+        }
+    }
+
     /// Connect to the database and create a pool from `config`.
     pub async fn new(config: &sqlxdb::Config) -> crate::Result<Self> {
         let inner = sqlx::pool::PoolOptions::<DB>::new()
@@ -233,6 +251,18 @@ mod tests {
         let mut tx = conn.begin().await.unwrap();
         runs_crud(&mut tx.context()).await;
         tx.commit().await.unwrap();
+    }
+    #[tokio::test]
+    async fn reports_pool_connections_in_use() {
+        let database = test_database().await;
+        let before = database.pool_status();
+        assert_eq!(before.max_connections, 1);
+        assert_eq!(before.size, 1);
+        assert_eq!(before.idle, 1);
+
+        let connection = database.conn().await.unwrap();
+        assert_eq!(database.pool_status().idle, 0);
+        drop(connection);
     }
     #[tokio::test]
     #[ignore = "requires tests/docker-db-env PostgreSQL service"]

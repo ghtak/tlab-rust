@@ -3,6 +3,7 @@ use std::sync::Arc;
 use tlab::Result;
 
 use super::app_config::AppConfig;
+use crate::metrics::Metrics;
 
 pub type AppDB = tlab::sqlxdb::Database<sqlx::Postgres>;
 pub type AppDBCtx<'a> = tlab::sqlxdb::Context<'a, sqlx::Postgres>;
@@ -12,6 +13,7 @@ pub struct AppContainer {
     pub config: AppConfig,
     pub http: tlab::http::Server,
     pub database: Arc<AppDB>,
+    pub metrics: Arc<Metrics>,
     pub password_hasher: Arc<dyn tlab::hash::PasswordHasher>,
     pub jwt_codec: Arc<tlab::jwt::JwtCodec>,
     pub rbac_service: Arc<crate::auth::service::RbacService>,
@@ -30,6 +32,7 @@ impl AppContainer {
             config: config.clone(),
             http: tlab::http::Server::new(config.http.clone()),
             database: database.clone(),
+            metrics: Arc::new(Metrics::new()),
             password_hasher,
             jwt_codec,
             rbac_service: Arc::new(crate::auth::service::RbacService::new(database.clone())),

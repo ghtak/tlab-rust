@@ -44,6 +44,10 @@ impl ApiResponse<()> {
         Self::error(axum::http::StatusCode::INTERNAL_SERVER_ERROR, message)
     }
 
+    pub fn service_unavailable(message: impl Into<String>) -> Self {
+        Self::error(axum::http::StatusCode::SERVICE_UNAVAILABLE, message)
+    }
+
     fn error(status_code: axum::http::StatusCode, message: impl Into<String>) -> Self {
         Self {
             status_code,

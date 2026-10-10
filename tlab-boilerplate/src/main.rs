@@ -2,6 +2,8 @@ mod api_response;
 mod app_config;
 mod app_container;
 mod auth;
+mod dashboard;
+mod metrics;
 mod migration;
 #[cfg(test)]
 mod test_app;
@@ -53,6 +55,7 @@ async fn main() -> tlab::Result<()> {
 
     let app = axum::Router::new()
         .merge(auth::route::router())
+        .merge(dashboard::route::router())
         .route_layer(axum::middleware::from_fn_with_state(
             container.clone(),
             auth::cookie::refresh_auth_cookies,
@@ -77,14 +80,23 @@ async fn main() -> tlab::Result<()> {
             tower_http::trace::TraceLayer::new_for_http()
                 .make_span_with(tlab::http::trace::new_request_span),
         )
+        .layer(axum::middleware::from_fn_with_state(
+            container.clone(),
+            metrics::track_requests,
+        ))
         .with_state(container.clone());
 
-    if let Some(tls_certificate_files) = container.config.tls_certificate_files.as_ref() {
-        tls_certificate_files.ensure_files(&[container.config.http.host.clone()])?;
-        container.http.run_https(app, tls_certificate_files).await?;
-    } else {
-        container.http.run_http(app).await?;
-    }
+    let metrics_task = metrics::Metrics::start(container.metrics.clone());
+    let result =
+        if let Some(tls_certificate_files) = container.config.tls_certificate_files.as_ref() {
+            tls_certificate_files.ensure_files(&[container.config.http.host.clone()])?;
+            container.http.run_https(app, tls_certificate_files).await
+        } else {
+            container.http.run_http(app).await
+        };
 
-    Ok(())
+    metrics_task.abort();
+    let _ = metrics_task.await;
+
+    result
 }
