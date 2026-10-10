@@ -21,9 +21,10 @@ import {
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from "../../components/ui/collapsible";
-import { hasPermission, pageAccess } from "../auth/access";
+import { pageAccess } from "../auth/access";
+import { useCurrentUser } from "../auth/hooks/useCurrentUser";
 import { useLogout } from "../auth/hooks/useLogout";
-import type { CurrentUser } from "../auth/types";
+import { usePermission } from "../auth/hooks/usePermission";
 
 const accessMenuItems = [
 	{
@@ -41,15 +42,17 @@ const accessMenuItems = [
 	{ to: "/users", label: "사용자", icon: Users, permission: pageAccess.users },
 ] as const;
 
-export function AppLayout({ user }: { user: CurrentUser }) {
+export function AppLayout() {
 	const pathname = useRouterState({
 		select: (state) => state.location.pathname,
 	});
 	const navigate = useNavigate();
+	const { user } = useCurrentUser();
+	const { hasPermission } = usePermission();
 	const signOut = useLogout();
 	const [menuOpen, setMenuOpen] = useState(false);
 	const visibleAccessMenuItems = accessMenuItems.filter(({ permission }) =>
-		hasPermission(user, permission),
+		hasPermission(permission),
 	);
 	const accessMenuVisible = visibleAccessMenuItems.length > 0;
 
@@ -60,6 +63,8 @@ export function AppLayout({ user }: { user: CurrentUser }) {
 			},
 		});
 	}
+
+	if (!user) return null;
 
 	return (
 		<div className="min-h-screen bg-[#f7f8fa] text-slate-900">

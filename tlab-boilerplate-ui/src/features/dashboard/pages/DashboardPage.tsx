@@ -1,4 +1,4 @@
-import { Link, useRouteContext } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { ArrowUpRight, KeyRound, ShieldCheck, Users } from "lucide-react";
 import {
 	Card,
@@ -7,7 +7,8 @@ import {
 	CardHeader,
 	CardTitle,
 } from "../../../components/ui/card";
-import { hasPermission, pageAccess } from "../../auth/access";
+import { pageAccess } from "../../auth/access";
+import { usePermission } from "../../auth/hooks/usePermission";
 
 const sections = [
 	{
@@ -37,9 +38,9 @@ const sections = [
 ] as const;
 
 export function DashboardPage() {
-	const { user } = useRouteContext({ from: "/_app" });
+	const { hasPermission } = usePermission();
 	const visibleSections = sections.filter(({ permission }) =>
-		hasPermission(user, permission),
+		hasPermission(permission),
 	);
 	return (
 		<div className="space-y-8">

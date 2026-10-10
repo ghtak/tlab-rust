@@ -1,4 +1,3 @@
-import { redirect } from "@tanstack/react-router";
 import type { CurrentUser } from "./types";
 
 export const pageAccess = {
@@ -7,10 +6,29 @@ export const pageAccess = {
 	users: "access:manage",
 } as const;
 
-export function hasPermission(user: CurrentUser, permission: string): boolean {
-	return user.permissions.includes(permission);
+export function hasPermission(
+	user: CurrentUser | null,
+	permission: string,
+): boolean {
+	return user?.permissions.includes(permission) ?? false;
 }
 
-export function requirePermission(user: CurrentUser, permission: string): void {
-	if (!hasPermission(user, permission)) throw redirect({ to: "/forbidden" });
+export function hasAnyPermission(
+	user: CurrentUser | null,
+	permissions: string[],
+): boolean {
+	return (
+		user !== null &&
+		permissions.some((permission) => hasPermission(user, permission))
+	);
+}
+
+export function hasAllPermissions(
+	user: CurrentUser | null,
+	permissions: string[],
+): boolean {
+	return (
+		user !== null &&
+		permissions.every((permission) => hasPermission(user, permission))
+	);
 }

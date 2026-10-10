@@ -19,12 +19,14 @@ src/
       hooks/
         useLogin.ts      로그인 요청과 사용자 캐시 갱신
         useLogout.ts     로그아웃 요청과 사용자 캐시 삭제
+        useCurrentUser.ts 현재 사용자 쿼리 접근
+        usePermission.ts  컴포넌트의 권한 판단
   routes/
     login.tsx            /login 경로와 진입 검사
     _app.tsx             보호 화면의 인증과 사용자 정보 조회
 ```
 
-인증에 속하는 코드는 `features/auth`에 모은다. `types.ts`는 인증 모듈에서 공유하는 현재 사용자 타입, `pages`는 화면, `services`는 서버 통신과 조회 설정, `hooks`는 로그인·로그아웃 요청 상태를 맡는다. `routes`에는 URL과 화면을 연결하는 코드만 둔다.
+인증에 속하는 코드는 `features/auth`에 모은다. `types.ts`는 현재 사용자 타입, `services`는 서버 통신과 조회 설정, `hooks`는 컴포넌트에서 사용하는 인증 상태와 동작을 맡는다. `access.ts`는 화면 권한 정책과 순수 권한 비교, `routeGuard.ts`는 권한 부족 시 라우트 이동을 맡는다. `routes`에는 URL과 화면을 연결하는 코드만 둔다.
 
 ## 전체 흐름
 
@@ -105,7 +107,7 @@ if (!user) throw redirect({ to: '/login' })
 return { user }
 ```
 
-`beforeLoad`는 화면 컴포넌트를 보여주기 전에 실행된다. 인증되지 않았거나 사용자 정보가 없으면 로그인 화면으로 이동한다. 조회한 `user`는 라우트 컴포넌트를 거쳐 [`AppLayout`](../../src/features/app-shell/AppLayout.tsx)에 전달되며, 상단에 이름과 이메일을 표시하고 권한에 따라 메뉴를 구성한다.
+`beforeLoad`는 화면 컴포넌트를 보여주기 전에 실행된다. 인증되지 않았거나 사용자 정보가 없으면 로그인 화면으로 이동한다. 조회한 사용자 정보는 TanStack Query 캐시에 저장된다. [`AppLayout`](../../src/features/app-shell/AppLayout.tsx)은 `useCurrentUser()`로 이름과 이메일을 읽고 `usePermission()`으로 메뉴를 구성한다. 대시보드 바로가기도 같은 권한 훅을 사용한다.
 
 반대로 [`src/routes/login.tsx`](../../src/routes/login.tsx)는 `/verify`로 이미 로그인한 사용자를 확인해 홈으로 보낸다. `/me`가 `401`을 반환한 상태라면 다시 홈으로 보내지 않는다.
 

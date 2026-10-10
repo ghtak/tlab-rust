@@ -7,16 +7,13 @@ import {
 
 export const Route = createFileRoute("/_app")({
 	beforeLoad: async ({ context }) => {
-		const verified = await context.queryClient.fetchQuery(authVerificationQuery);
+		const verified = await context.queryClient.fetchQuery(
+			authVerificationQuery,
+		);
 		if (!verified) throw redirect({ to: "/login" });
 		const user = await context.queryClient.fetchQuery(currentUserQuery);
 		if (!user) throw redirect({ to: "/login" });
 		return { user };
 	},
-	component: AppRoute,
+	component: AppLayout,
 });
-
-function AppRoute() {
-	const { user } = Route.useRouteContext();
-	return <AppLayout user={user} />;
-}

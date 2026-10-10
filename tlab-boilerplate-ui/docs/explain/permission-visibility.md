@@ -17,8 +17,8 @@
 
 1. 서버 API에서 해당 작업에 필요한 권한 코드를 정한다. 메뉴만을 위한 권한 코드는 만들지 않는다.
 2. `src/features/auth/access.ts`의 `pageAccess`에 화면의 요구 권한을 정의한다.
-3. 라우트의 `beforeLoad`에서 `requirePermission(context.user, pageAccess.<화면>)`을 호출한다. 같은 권한을 쓰는 하위 화면은 부모 라우트에서 검사한다.
-4. 사이드메뉴 항목과 대시보드 바로가기에 같은 `pageAccess` 값을 연결한다. 표시는 `hasPermission`으로 판단한다.
+3. 라우트의 `beforeLoad`에서 `src/features/auth/routeGuard.ts`의 `requirePermission(context.user, pageAccess.<화면>)`을 호출한다. 같은 권한을 쓰는 하위 화면은 부모 라우트에서 검사한다.
+4. 사이드메뉴 항목과 대시보드 바로가기에 같은 `pageAccess` 값을 연결한다. 컴포넌트는 `usePermission()`으로 표시 여부를 판단하고, 라우트 가드는 같은 순수 권한 함수를 사용한다.
 5. 권한이 있는 사용자와 없는 사용자의 메뉴, 바로가기, 직접 URL 접근을 확인한다.
 
 ## 권한 변경과 API 응답
