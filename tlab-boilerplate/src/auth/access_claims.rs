@@ -5,9 +5,9 @@ use axum::{
     http::{HeaderValue, header, request::Parts},
 };
 use serde::{Deserialize, Serialize};
-use tlab::jwt::{JwtClaims, JwtCodec, TokenUse};
+use tlab::jwt::{JwtClaims, TokenUse};
 
-use crate::{api_response::ApiResponse, app_container::AppContainer};
+use crate::{api_response::ApiResponse, app_container::AppContainer, auth::service::TokenService};
 
 #[derive(Clone)]
 pub struct AccessClaims {
@@ -50,7 +50,8 @@ impl FromRequestParts<Arc<AppContainer>> for AccessClaims {
         if let Some(claims) = parts.extensions.get::<AccessClaims>() {
             return Ok(claims.clone());
         }
-        extract_required_claims(parts.headers.get(header::AUTHORIZATION), &state.jwt_codec)
+        extract_required_claims(parts.headers.get(header::AUTHORIZATION), &state.token_service)
+            .await
     }
 }
 
@@ -64,20 +65,22 @@ impl OptionalFromRequestParts<Arc<AppContainer>> for AccessClaims {
         if let Some(claims) = parts.extensions.get::<AccessClaims>() {
             return Ok(Some(claims.clone()));
         }
-        extract_claims(parts.headers.get(header::AUTHORIZATION), &state.jwt_codec)
+        extract_claims(parts.headers.get(header::AUTHORIZATION), &state.token_service).await
     }
 }
 
-fn extract_required_claims(
+async fn extract_required_claims(
     authorization: Option<&HeaderValue>,
-    codec: &JwtCodec,
+    token_service: &TokenService,
 ) -> Result<AccessClaims, ApiResponse<()>> {
-    extract_claims(authorization, codec)?.ok_or_else(|| ApiResponse::unauthorized("invalid token"))
+    extract_claims(authorization, token_service)
+        .await?
+        .ok_or_else(|| ApiResponse::unauthorized("invalid token"))
 }
 
-fn extract_claims(
+async fn extract_claims(
     authorization: Option<&HeaderValue>,
-    codec: &JwtCodec,
+    token_service: &TokenService,
 ) -> Result<Option<AccessClaims>, ApiResponse<()>> {
     let Some(authorization) = authorization else {
         return Ok(None);
@@ -93,14 +96,23 @@ fn extract_claims(
         return Err(invalid_token());
     }
 
-    let jwt = codec.verify(token).map_err(|_| invalid_token())?;
+    let jwt = token_service
+        .verify_access(token)
+        .await
+        .map_err(|error| match error {
+            tlab::Error::InvalidToken => invalid_token(),
+            error => {
+                tracing::error!(?error, "Failed to verify access token");
+                ApiResponse::internal_error("failed to verify access token")
+            }
+        })?;
     AccessClaims::from_jwt(jwt).map(Some)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tlab::jwt::{EdDsaKeyFiles, JwtConfig};
+    use tlab::jwt::{EdDsaKeyFiles, JwtCodec, JwtConfig};
 
     fn test_codec() -> JwtCodec {
         let directory =
@@ -122,16 +134,20 @@ mod tests {
         codec
     }
 
-    #[test]
-    fn extracts_access_claims() {
-        let codec = test_codec();
+    #[tokio::test]
+    async fn extracts_access_claims() {
+        let codec = Arc::new(test_codec());
+        let token_service = TokenService::new(codec.clone());
         let app = serde_json::json!({
             "role_ids": [1, 2],
             "session_id": "550e8400-e29b-41d4-a716-446655440000"
         });
         let pair = codec.issue_pair("42", Some(app)).unwrap();
+        token_service.activate_access(&pair.access).await.unwrap();
         let access = HeaderValue::from_str(&format!("Bearer {}", pair.access.token)).unwrap();
-        let claims = extract_required_claims(Some(&access), &codec).unwrap();
+        let claims = extract_required_claims(Some(&access), &token_service)
+            .await
+            .unwrap();
         assert_eq!(claims.user_account_id().unwrap(), 42);
         assert_eq!(claims.jwt.token_use, TokenUse::Access);
         assert_eq!(claims.app.role_ids, vec![1, 2]);
@@ -141,9 +157,10 @@ mod tests {
         );
     }
 
-    #[test]
-    fn rejects_non_numeric_subject() {
-        let codec = test_codec();
+    #[tokio::test]
+    async fn rejects_non_numeric_subject() {
+        let codec = Arc::new(test_codec());
+        let token_service = TokenService::new(codec.clone());
         let app = serde_json::json!({
             "role_ids": [1],
             "session_id": "550e8400-e29b-41d4-a716-446655440000"
@@ -151,16 +168,20 @@ mod tests {
         let invalid_subject = codec.issue_pair("user-42", Some(app)).unwrap();
         let access =
             HeaderValue::from_str(&format!("Bearer {}", invalid_subject.access.token)).unwrap();
-        let claims = extract_claims(Some(&access), &codec).unwrap().unwrap();
         assert_eq!(
-            claims.user_account_id().err().unwrap().status_code,
+            extract_claims(Some(&access), &token_service)
+                .await
+                .err()
+                .unwrap()
+                .status_code,
             axum::http::StatusCode::UNAUTHORIZED
         );
     }
 
-    #[test]
-    fn rejects_missing_or_invalid_authorization() {
-        let codec = test_codec();
+    #[tokio::test]
+    async fn rejects_missing_or_invalid_authorization() {
+        let codec = Arc::new(test_codec());
+        let token_service = TokenService::new(codec.clone());
         let pair = codec
             .issue_pair(
                 "42",
@@ -171,9 +192,10 @@ mod tests {
             )
             .unwrap();
 
-        assert!(extract_claims(None, &codec).unwrap().is_none());
+        assert!(extract_claims(None, &token_service).await.unwrap().is_none());
         assert_eq!(
-            extract_required_claims(None, &codec)
+            extract_required_claims(None, &token_service)
+                .await
                 .err()
                 .unwrap()
                 .status_code,
@@ -187,20 +209,26 @@ mod tests {
             format!("Bearer {}", pair.refresh.token),
         ] {
             let header = HeaderValue::from_str(&value).unwrap();
-            let response = extract_claims(Some(&header), &codec).err().unwrap();
+            let response = extract_claims(Some(&header), &token_service)
+                .await
+                .err()
+                .unwrap();
             assert_eq!(response.status_code, axum::http::StatusCode::UNAUTHORIZED);
             assert_eq!(response.error.as_deref(), Some("invalid token"));
         }
     }
 
-    #[test]
-    fn rejects_invalid_app_claims() {
-        let codec = test_codec();
+    #[tokio::test]
+    async fn rejects_invalid_app_claims() {
+        let codec = Arc::new(test_codec());
+        let token_service = TokenService::new(codec.clone());
         let missing_app = codec.issue_pair("42", None).unwrap();
+        token_service.activate_access(&missing_app.access).await.unwrap();
         let access =
             HeaderValue::from_str(&format!("Bearer {}", missing_app.access.token)).unwrap();
         assert_eq!(
-            extract_claims(Some(&access), &codec)
+            extract_claims(Some(&access), &token_service)
+                .await
                 .err()
                 .unwrap()
                 .status_code,
@@ -215,9 +243,34 @@ mod tests {
             serde_json::json!({ "role_ids": [1], "session_id": "invalid" }),
         ] {
             let pair = codec.issue_pair("42", Some(app)).unwrap();
+            token_service.activate_access(&pair.access).await.unwrap();
             let access = HeaderValue::from_str(&format!("Bearer {}", pair.access.token)).unwrap();
-            let response = extract_claims(Some(&access), &codec).err().unwrap();
+            let response = extract_claims(Some(&access), &token_service)
+                .await
+                .err()
+                .unwrap();
             assert_eq!(response.status_code, axum::http::StatusCode::UNAUTHORIZED);
         }
+    }
+
+    #[tokio::test]
+    async fn accepts_only_the_latest_registered_access_token() {
+        let codec = Arc::new(test_codec());
+        let token_service = TokenService::new(codec.clone());
+        let app = serde_json::json!({
+            "role_ids": [1],
+            "session_id": "550e8400-e29b-41d4-a716-446655440000"
+        });
+        let first = codec.issue_access("42", Some(app.clone())).unwrap();
+        let second = codec.issue_access("42", Some(app)).unwrap();
+        let first_header = HeaderValue::from_str(&format!("Bearer {}", first.token)).unwrap();
+        let second_header = HeaderValue::from_str(&format!("Bearer {}", second.token)).unwrap();
+
+        assert!(extract_claims(Some(&first_header), &token_service).await.is_err());
+        token_service.activate_access(&first).await.unwrap();
+        assert!(extract_claims(Some(&first_header), &token_service).await.is_ok());
+        token_service.activate_access(&second).await.unwrap();
+        assert!(extract_claims(Some(&first_header), &token_service).await.is_err());
+        assert!(extract_claims(Some(&second_header), &token_service).await.is_ok());
     }
 }

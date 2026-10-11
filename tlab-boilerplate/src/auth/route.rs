@@ -198,8 +198,12 @@ async fn logout(
     let command = LogoutUserCommand {
         user_account_id: claims.user_account_id()?,
         session_id: claims.app.session_id,
+        access_jti: claims
+            .jwt
+            .jti
+            .ok_or_else(|| ApiResponse::unauthorized("invalid token"))?,
     };
-    LogoutUserUsecase::new(container.database.clone())
+    LogoutUserUsecase::new(container.database.clone(), container.token_service.clone())
         .execute(&command)
         .await
         .map_err(|error| {
@@ -378,6 +382,7 @@ mod tests {
                 })),
             )
             .unwrap();
+        container.token_service.activate_access(&token.access).await.unwrap();
 
         let response = app
             .oneshot(

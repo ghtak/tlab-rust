@@ -1,9 +1,10 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use tlab::jwt::{SignedJwt, SignedJwtPair, TokenUse};
+use tlab::jwt::{JwtClaims, SignedJwt, SignedJwtPair, TokenUse};
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::{
@@ -17,11 +18,64 @@ use crate::{
 
 pub struct TokenService {
     jwt_codec: Arc<tlab::jwt::JwtCodec>,
+    // TODO: Replace this process-local map with Redis when authentication spans instances.
+    access_jtis: RwLock<HashMap<i64, String>>,
 }
 
 impl TokenService {
     pub fn new(jwt_codec: Arc<tlab::jwt::JwtCodec>) -> Self {
-        Self { jwt_codec }
+        Self {
+            jwt_codec,
+            access_jtis: RwLock::new(HashMap::new()),
+        }
+    }
+
+    pub async fn verify_access(&self, token: &str) -> tlab::Result<JwtClaims> {
+        let claims = self.jwt_codec.verify(token)?;
+        if claims.token_use != TokenUse::Access {
+            return Err(tlab::Error::InvalidToken);
+        }
+        let user_account_id = claims
+            .sub
+            .parse::<i64>()
+            .map_err(|_| tlab::Error::InvalidToken)?;
+        let jti = claims.jti.as_deref().ok_or(tlab::Error::InvalidToken)?;
+        if self
+            .access_jtis
+            .read()
+            .await
+            .get(&user_account_id)
+            .map(String::as_str)
+            != Some(jti)
+        {
+            return Err(tlab::Error::InvalidToken);
+        }
+        Ok(claims)
+    }
+
+    pub async fn activate_access(&self, access: &SignedJwt) -> tlab::Result<()> {
+        let user_account_id = access
+            .claims
+            .sub
+            .parse::<i64>()
+            .map_err(|_| tlab::Error::IllegalState("invalid issued access subject".into()))?;
+        let jti = access
+            .claims
+            .jti
+            .as_ref()
+            .ok_or_else(|| tlab::Error::IllegalState("issued access token has no jti".into()))?;
+        self.access_jtis
+            .write()
+            .await
+            .insert(user_account_id, jti.clone());
+        Ok(())
+    }
+
+    pub async fn revoke_access(&self, user_account_id: i64, jti: &str) {
+        let mut access_jtis = self.access_jtis.write().await;
+        if access_jtis.get(&user_account_id).map(String::as_str) == Some(jti) {
+            access_jtis.remove(&user_account_id);
+        }
     }
 
     pub async fn issue_login_tokens(

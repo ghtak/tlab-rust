@@ -57,6 +57,7 @@ impl RefreshTokenUsecase {
         session.expires_at = TokenService::token_expires_at(&tokens.refresh)?;
         refresh_token_repository::save(&mut tx.context(), &session).await?;
         tx.commit().await?;
+        self.token_service.activate_access(&tokens.access).await?;
 
         Ok(tokens)
     }
@@ -77,9 +78,11 @@ impl RefreshTokenUsecase {
             .await?
             .ok_or(tlab::Error::InvalidToken)?;
         validate_session(&session)?;
-        self.token_service
+        let access = self.token_service
             .issue_access(&mut conn.context(), user_account_id, session_id)
-            .await
+            .await?;
+        self.token_service.activate_access(&access).await?;
+        Ok(access)
     }
 }
 

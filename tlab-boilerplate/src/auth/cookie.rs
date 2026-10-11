@@ -73,13 +73,21 @@ pub async fn refresh_auth_cookies(
         return next.run(req).await;
     }
 
-    if let Some(claims) = jar
-        .get("access_token")
-        .and_then(|cookie| container.jwt_codec.verify(cookie.value()).ok())
-        .and_then(|jwt| AccessClaims::from_jwt(jwt).ok())
-    {
-        req.extensions_mut().insert(claims);
-        return next.run(req).await;
+    if let Some(cookie) = jar.get("access_token") {
+        match container.token_service.verify_access(cookie.value()).await {
+            Ok(jwt) => {
+                if let Ok(claims) = AccessClaims::from_jwt(jwt) {
+                    req.extensions_mut().insert(claims);
+                    return next.run(req).await;
+                }
+            }
+            Err(tlab::Error::InvalidToken) => {}
+            Err(error) => {
+                tracing::error!(?error, "Failed to verify access cookie");
+                return ApiResponse::internal_error("failed to verify access cookie")
+                    .into_response();
+            }
+        }
     }
 
     let Some(refresh_token) = jar.get("refresh_token") else {
@@ -100,11 +108,7 @@ pub async fn refresh_auth_cookies(
         }
     };
 
-    let claims = container
-        .jwt_codec
-        .verify(&access.token)
-        .ok()
-        .and_then(|jwt| AccessClaims::from_jwt(jwt).ok());
+    let claims = AccessClaims::from_jwt(access.claims.clone()).ok();
     let Some(claims) = claims else {
         tracing::error!("Failed to validate refreshed access token");
         return ApiResponse::internal_error("failed to refresh auth cookies").into_response();
@@ -211,6 +215,50 @@ mod tests {
                 .all(|cookie| cookie.name() != "refresh_token")
         );
         assert!(cookies.iter().any(|cookie| cookie.name() == "access_token"));
+    }
+
+    #[tokio::test]
+    async fn refreshes_replaced_access_cookie_when_refresh_token_is_valid() {
+        let (auth_app, container) = test_app::setup().await;
+        let (old_access, refresh_token) = login_tokens(auth_app.clone()).await;
+        let _ = login_tokens(auth_app).await;
+
+        let app = Router::<Arc<AppContainer>>::new()
+            .route("/test", get(|_claims: AccessClaims| async { StatusCode::OK }))
+            .route_layer(middleware::from_fn_with_state(
+                container.clone(),
+                refresh_auth_cookies,
+            ))
+            .with_state(container.clone());
+        let response = app
+            .oneshot(
+                Request::get("/test")
+                    .header(
+                        header::COOKIE,
+                        format!("access_token={old_access}; refresh_token={refresh_token}"),
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let new_access = response
+            .headers()
+            .get_all(header::SET_COOKIE)
+            .iter()
+            .filter_map(|value| Cookie::parse(value.to_str().ok()?.to_owned()).ok())
+            .find(|cookie| cookie.name() == "access_token")
+            .unwrap();
+        assert!(matches!(
+            container.token_service.verify_access(&old_access).await,
+            Err(tlab::Error::InvalidToken)
+        ));
+        container
+            .token_service
+            .verify_access(new_access.value())
+            .await
+            .unwrap();
     }
 
     #[tokio::test]

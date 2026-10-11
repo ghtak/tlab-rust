@@ -79,6 +79,7 @@ impl LoginGoogleUserUsecase {
         identity.last_login_at = Some(chrono::Utc::now());
         user_repository::save_user_identity(&mut tx.context(), &identity).await?;
         tx.commit().await?;
+        self.token_service.activate_access(&tokens.access).await?;
         Ok(tokens)
     }
 }

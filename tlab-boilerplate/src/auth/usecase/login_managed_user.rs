@@ -95,6 +95,7 @@ impl LoginManagedUserUsecase {
         identity.last_login_at = Some(chrono::Utc::now());
         user_repository::save_user_identity(&mut tx.context(), &identity).await?;
         tx.commit().await?;
+        self.token_service.activate_access(&tokens.access).await?;
         Ok(LoginManagedUserResult { tokens })
     }
 }
@@ -271,10 +272,11 @@ mod tests {
         let hasher = password_hasher();
         let account = create_user(&app_db, &hasher).await;
         let jwt_codec = jwt_codec();
+        let token_service = Arc::new(TokenService::new(jwt_codec.clone()));
         let login = LoginManagedUserUsecase::new(
             app_db.clone(),
             hasher,
-            Arc::new(TokenService::new(jwt_codec.clone())),
+            token_service.clone(),
         );
         let command = LoginManagedUserCommand {
             email: account.email.clone(),
@@ -283,6 +285,14 @@ mod tests {
         let first = login.execute(&command).await.unwrap();
         let second = login.execute(&command).await.unwrap();
         assert_ne!(first.tokens.refresh.token, second.tokens.refresh.token);
+        assert!(matches!(
+            token_service.verify_access(&first.tokens.access.token).await,
+            Err(tlab::Error::InvalidToken)
+        ));
+        token_service
+            .verify_access(&second.tokens.access.token)
+            .await
+            .unwrap();
         let session_id = |token: &str| {
             let app = jwt_codec.verify(token).unwrap().app.unwrap();
             serde_json::from_value::<AppClaims>(app).unwrap().session_id
@@ -301,13 +311,18 @@ mod tests {
         );
         drop(conn);
 
-        let logout = LogoutUserUsecase::new(app_db.clone());
+        let logout = LogoutUserUsecase::new(app_db.clone(), token_service.clone());
         let command = LogoutUserCommand {
             user_account_id: account.id,
             session_id: first_session_id,
+            access_jti: first.tokens.access.claims.jti.clone().unwrap(),
         };
         logout.execute(&command).await.unwrap();
         logout.execute(&command).await.unwrap();
+        token_service
+            .verify_access(&second.tokens.access.token)
+            .await
+            .unwrap();
 
         let mut conn = app_db.conn().await.unwrap();
         let remaining =
@@ -320,8 +335,13 @@ mod tests {
         let command = LogoutUserCommand {
             user_account_id: account.id,
             session_id: second_session_id,
+            access_jti: second.tokens.access.claims.jti.clone().unwrap(),
         };
         logout.execute(&command).await.unwrap();
+        assert!(matches!(
+            token_service.verify_access(&second.tokens.access.token).await,
+            Err(tlab::Error::InvalidToken)
+        ));
         delete_user(&app_db, &account).await;
     }
 

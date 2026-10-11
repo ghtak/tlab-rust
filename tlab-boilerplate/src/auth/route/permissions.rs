@@ -372,6 +372,7 @@ mod tests {
                 })),
             )
             .unwrap();
+        container.token_service.activate_access(&token.access).await.unwrap();
         let response = app
             .oneshot(
                 Request::post("/api/v1/auth/permissions")
@@ -521,6 +522,7 @@ mod tests {
                 })),
             )
             .unwrap();
+        container.token_service.activate_access(&token.access).await.unwrap();
         let response = app
             .oneshot(
                 Request::get("/api/v1/auth/permissions")

@@ -700,6 +700,11 @@ mod tests {
                 })),
             )
             .unwrap();
+        container
+            .token_service
+            .activate_access(&without_permission.access)
+            .await
+            .unwrap();
         let response = app
             .oneshot(
                 Request::get("/api/v1/auth/users")
