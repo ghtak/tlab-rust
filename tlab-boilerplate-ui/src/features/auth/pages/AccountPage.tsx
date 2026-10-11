@@ -1,4 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
+import { FormattedMessage } from "react-intl";
 import { Button } from "../../../components/ui/button";
 import { useLogout } from "../hooks/useLogout";
 import type { CurrentUser } from "../types";
@@ -24,15 +25,24 @@ export function AccountPage({ user }: { user: CurrentUser }) {
 					onClick={handleLogout}
 					disabled={signOut.isPending}
 				>
-					로그아웃
+					<FormattedMessage id="common.logout" defaultMessage="로그아웃" />
 				</Button>
 			</header>
 			<div>
-				<h1 className="text-3xl font-semibold">안녕하세요, {user.name}님</h1>
+				<h1 className="text-3xl font-semibold">
+					<FormattedMessage
+						id="auth.account.greeting"
+						defaultMessage="안녕하세요, {name}님"
+						values={{ name: user.name }}
+					/>
+				</h1>
 				<p className="mt-2 text-muted-foreground">{user.email}</p>
 				{signOut.isError && (
 					<p className="mt-4 text-sm text-destructive">
-						로그아웃하지 못했습니다. 다시 시도해 주세요.
+						<FormattedMessage
+							id="shell.logoutFailed"
+							defaultMessage="로그아웃하지 못했습니다. 다시 시도해 주세요."
+						/>
 					</p>
 				)}
 			</div>

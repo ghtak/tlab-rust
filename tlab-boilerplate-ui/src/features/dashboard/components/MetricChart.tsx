@@ -1,3 +1,4 @@
+import { FormattedMessage, useIntl } from "react-intl";
 import type { HistoryPoint } from "../types";
 
 interface MetricChartProps {
@@ -8,6 +9,7 @@ interface MetricChartProps {
 }
 
 export function MetricChart({ label, points, value, color }: MetricChartProps) {
+	const intl = useIntl();
 	const valid = points.filter((point) => value(point) !== null);
 	const first = valid[0]?.timestamp ?? 0;
 	const last = valid.at(-1)?.timestamp ?? first;
@@ -26,7 +28,10 @@ export function MetricChart({ label, points, value, color }: MetricChartProps) {
 			<div className="h-36 rounded-lg bg-slate-50">
 				{valid.length < 2 ? (
 					<p className="flex h-full items-center justify-center text-sm text-slate-500">
-						그래프 데이터를 모으는 중입니다.
+						<FormattedMessage
+							id="dashboard.chartCollecting"
+							defaultMessage="그래프 데이터를 모으는 중입니다."
+						/>
 					</p>
 				) : (
 					<svg
@@ -34,7 +39,13 @@ export function MetricChart({ label, points, value, color }: MetricChartProps) {
 						preserveAspectRatio="none"
 						className="h-full w-full"
 						role="img"
-						aria-label={`${label} 최근 30분 추이`}
+						aria-label={intl.formatMessage(
+							{
+								id: "dashboard.chartTrend",
+								defaultMessage: "{label} 최근 30분 추이",
+							},
+							{ label },
+						)}
 					>
 						<path
 							d="M8 8 H592 M8 65 H592 M8 122 H592"
@@ -52,16 +63,16 @@ export function MetricChart({ label, points, value, color }: MetricChartProps) {
 				)}
 			</div>
 			<div className="mt-2 flex justify-between text-xs text-slate-500">
-				<span>{valid.length > 0 ? formatTime(first) : "—"}</span>
+				<span>{valid.length > 0 ? formatTime(first, intl.locale) : "—"}</span>
 				<span>0–100%</span>
-				<span>{valid.length > 0 ? formatTime(last) : "—"}</span>
+				<span>{valid.length > 0 ? formatTime(last, intl.locale) : "—"}</span>
 			</div>
 		</div>
 	);
 }
 
-function formatTime(timestamp: number): string {
-	return new Date(timestamp).toLocaleTimeString("ko-KR", {
+function formatTime(timestamp: number, locale: string): string {
+	return new Date(timestamp).toLocaleTimeString(locale, {
 		hour: "2-digit",
 		minute: "2-digit",
 	});

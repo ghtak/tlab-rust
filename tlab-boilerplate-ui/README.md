@@ -39,3 +39,15 @@ npx shadcn@latest init -t vite
 ## 권한 기반 메뉴
 
 사이드메뉴와 대시보드 바로가기의 표시 조건, 직접 URL 접근 검사, 새 화면 추가 방법은 [UI 메뉴 표시와 화면 접근 권한](docs/explain/permission-visibility.md)을 참고한다.
+
+## 메시지와 언어
+
+화면 문구는 `react-intl`로 표시한다. 한국어·영어 메시지는 각각 `src/lib/messages/ko.ts`, `src/lib/messages/en.ts`에서 관리하고, `src/lib/messages.ts`에서 합친다. 컴포넌트에서는 고정된 ID와 한국어 기본 문구를 함께 지정한다.
+
+```tsx
+<FormattedMessage id="auth.login.title" defaultMessage="로그인" />
+```
+
+속성값이나 코드 안에서 문자열이 필요하면 `useIntl().formatMessage({ id, defaultMessage })`를 사용한다. 사용자가 선택한 언어는 브라우저에 저장되며, 선택값이 없으면 브라우저 언어를 사용한다. 그 외 언어는 한국어로 표시한다.
+
+서버에서 문구를 관리하게 되면 `AppIntlProvider`의 `overrides`에 언어별 `msg_id`와 문구를 전달한다. 표시 우선순위는 **override → 해당 언어의 메시지 파일 → 컴포넌트의 `defaultMessage`**다. 현재 서버 조회 기능은 연결하지 않았다.

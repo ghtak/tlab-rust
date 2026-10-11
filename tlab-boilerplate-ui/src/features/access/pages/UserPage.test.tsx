@@ -6,6 +6,7 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react";
+import { IntlProvider } from "react-intl";
 import { afterEach, expect, test, vi } from "vitest";
 import { changeUserStatus, getUsers } from "../services/api";
 import { UserPage } from "./UserPage";
@@ -46,9 +47,11 @@ test("사용자 검색과 상태 필터, 페이지 이동 결과를 표시한다
 	);
 
 	render(
-		<QueryClientProvider client={new QueryClient()}>
-			<UserPage />
-		</QueryClientProvider>,
+		<IntlProvider locale="ko">
+			<QueryClientProvider client={new QueryClient()}>
+				<UserPage />
+			</QueryClientProvider>
+		</IntlProvider>,
 	);
 
 	await screen.findByText("김민준");
@@ -116,9 +119,11 @@ test("작업 메뉴에서 사용자 계정을 비활성화하고 활성화한다
 	});
 
 	render(
-		<QueryClientProvider client={new QueryClient()}>
-			<UserPage />
-		</QueryClientProvider>,
+		<IntlProvider locale="ko">
+			<QueryClientProvider client={new QueryClient()}>
+				<UserPage />
+			</QueryClientProvider>
+		</IntlProvider>,
 	);
 
 	await screen.findByText("테스트 사용자");

@@ -6,6 +6,7 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react";
+import { IntlProvider } from "react-intl";
 import { afterEach, expect, test, vi } from "vitest";
 import {
 	changeRolePermissions,
@@ -53,9 +54,11 @@ test("페이지를 넘겨 선택한 퍼미션 목록을 저장한다", async () 
 	vi.mocked(changeRolePermissions).mockResolvedValue();
 
 	render(
-		<QueryClientProvider client={new QueryClient()}>
-			<RolePermissionPage roleId={7} />
-		</QueryClientProvider>,
+		<IntlProvider locale="ko">
+			<QueryClientProvider client={new QueryClient()}>
+				<RolePermissionPage roleId={7} />
+			</QueryClientProvider>
+		</IntlProvider>,
 	);
 
 	await waitFor(() => expect(getPermissions).toHaveBeenCalled());

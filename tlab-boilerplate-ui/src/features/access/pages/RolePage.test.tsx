@@ -6,6 +6,7 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react";
+import { IntlProvider } from "react-intl";
 import { afterEach, expect, test, vi } from "vitest";
 import { createRole, deleteRole, getRoles } from "../services/api";
 import { RolePage } from "./RolePage";
@@ -43,9 +44,11 @@ test("롤 추가와 삭제 후 목록을 다시 조회한다", async () => {
 	});
 
 	render(
-		<QueryClientProvider client={new QueryClient()}>
-			<RolePage />
-		</QueryClientProvider>,
+		<IntlProvider locale="ko">
+			<QueryClientProvider client={new QueryClient()}>
+				<RolePage />
+			</QueryClientProvider>
+		</IntlProvider>,
 	);
 
 	await screen.findByText("등록된 롤이 없습니다.");

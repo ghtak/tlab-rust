@@ -6,6 +6,7 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react";
+import { IntlProvider } from "react-intl";
 import { afterEach, expect, test, vi } from "vitest";
 import { changeUserRoles, getRoles, getUserRoles } from "../services/api";
 import { UserRolePage } from "./UserRolePage";
@@ -54,9 +55,11 @@ test("페이지를 넘겨 선택한 롤의 추가와 해제를 저장한다", as
 	vi.mocked(changeUserRoles).mockResolvedValue();
 
 	render(
-		<QueryClientProvider client={new QueryClient()}>
-			<UserRolePage userId={7} />
-		</QueryClientProvider>,
+		<IntlProvider locale="ko">
+			<QueryClientProvider client={new QueryClient()}>
+				<UserRolePage userId={7} />
+			</QueryClientProvider>
+		</IntlProvider>,
 	);
 
 	await screen.findByRole("checkbox", { name: /sales/ });

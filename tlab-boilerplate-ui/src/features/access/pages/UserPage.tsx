@@ -8,6 +8,7 @@ import {
 	PowerIcon,
 } from "lucide-react";
 import { useState } from "react";
+import { FormattedMessage, useIntl } from "react-intl";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -49,24 +50,28 @@ import type { User, UserStatus } from "../types";
 
 const PAGE_SIZE = 20;
 
-const statusLabels: Record<UserStatus, string> = {
-	active: "활성",
-	suspended: "비활성",
-	withdrawn: "탈퇴",
-};
-
 const statusStyles: Record<UserStatus, string> = {
 	active: "bg-emerald-50 text-emerald-700 ring-emerald-200",
 	suspended: "bg-amber-50 text-amber-700 ring-amber-200",
 	withdrawn: "bg-slate-100 text-slate-600 ring-slate-200",
 };
 
-const loginDateFormat = new Intl.DateTimeFormat("ko-KR", {
-	dateStyle: "medium",
-	timeStyle: "short",
-});
-
 export function UserPage() {
+	const intl = useIntl();
+	const statusLabels: Record<UserStatus, string> = {
+		active: intl.formatMessage({
+			id: "access.user.status.active",
+			defaultMessage: "활성",
+		}),
+		suspended: intl.formatMessage({
+			id: "access.user.status.suspended",
+			defaultMessage: "비활성",
+		}),
+		withdrawn: intl.formatMessage({
+			id: "access.user.status.withdrawn",
+			defaultMessage: "탈퇴",
+		}),
+	};
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const [inputQ, setInputQ] = useState("");
@@ -97,20 +102,45 @@ export function UserPage() {
 		<div className="space-y-5">
 			<div>
 				<p className="mb-2 text-sm text-slate-500">
-					접근 관리 / <span className="text-slate-900">사용자</span>
+					<FormattedMessage
+						id="common.accessManagement"
+						defaultMessage="접근 관리"
+					/>{" "}
+					/{" "}
+					<span className="text-slate-900">
+						<FormattedMessage id="common.users" defaultMessage="사용자" />
+					</span>
 				</p>
-				<h1 className="text-3xl font-semibold tracking-tight">사용자</h1>
+				<h1 className="text-3xl font-semibold tracking-tight">
+					<FormattedMessage id="common.users" defaultMessage="사용자" />
+				</h1>
 				<p className="mt-1 text-sm text-slate-500">
-					사용자 계정의 상태와 연결된 롤을 조회합니다.
+					<FormattedMessage
+						id="access.user.description"
+						defaultMessage="사용자 계정의 상태와 연결된 롤을 조회합니다."
+					/>
 				</p>
 			</div>
 
 			<Card className="gap-0 bg-white py-0 shadow-sm">
 				<CardHeader className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 py-4 sm:px-6">
 					<div className="flex items-center gap-3">
-						<CardTitle>목록</CardTitle>
+						<CardTitle>
+							<FormattedMessage id="common.list" defaultMessage="목록" />
+						</CardTitle>
 						<span className="text-sm text-slate-500">
-							{data ? `${data.total}개 항목` : "항목 조회 중"}
+							{data ? (
+								<FormattedMessage
+									id="common.itemCount"
+									defaultMessage="{count}개 항목"
+									values={{ count: data.total }}
+								/>
+							) : (
+								<FormattedMessage
+									id="common.loadingItems"
+									defaultMessage="항목 조회 중"
+								/>
+							)}
 						</span>
 					</div>
 					<div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
@@ -122,18 +152,32 @@ export function UserPage() {
 										className="min-w-28 justify-between"
 									/>
 								}
-								aria-label="상태 필터"
+								aria-label={intl.formatMessage({
+									id: "access.user.statusFilter",
+									defaultMessage: "상태 필터",
+								})}
 							>
-								{status ? statusLabels[status] : "전체 상태"}
+								{status
+									? statusLabels[status]
+									: intl.formatMessage({
+											id: "access.user.allStatuses",
+											defaultMessage: "전체 상태",
+										})}
 								<ChevronDownIcon />
 							</DropdownMenuTrigger>
 							<DropdownMenuContent align="end">
 								{(
 									[
-										["", "전체 상태"],
-										["active", "활성"],
-										["suspended", "비활성"],
-										["withdrawn", "탈퇴"],
+										[
+											"",
+											intl.formatMessage({
+												id: "access.user.allStatuses",
+												defaultMessage: "전체 상태",
+											}),
+										],
+										["active", statusLabels.active],
+										["suspended", statusLabels.suspended],
+										["withdrawn", statusLabels.withdrawn],
 									] as const
 								).map(([value, label]) => (
 									<DropdownMenuItem
@@ -157,51 +201,108 @@ export function UserPage() {
 							}}
 						>
 							<label htmlFor="user-search" className="sr-only">
-								이름 또는 이메일 검색
+								<FormattedMessage
+									id="access.user.search"
+									defaultMessage="이름 또는 이메일 검색"
+								/>
 							</label>
 							<Input
 								id="user-search"
 								type="search"
-								placeholder="이름 또는 이메일 검색"
+								placeholder={intl.formatMessage({
+									id: "access.user.search",
+									defaultMessage: "이름 또는 이메일 검색",
+								})}
 								value={inputQ}
 								onChange={(event) => setInputQ(event.target.value)}
 							/>
-							<Button type="submit">검색</Button>
+							<Button type="submit">
+								<FormattedMessage id="common.search" defaultMessage="검색" />
+							</Button>
 						</form>
 					</div>
 				</CardHeader>
 				{isPending ? (
 					<output className="block px-5 py-12 text-center text-sm text-slate-500">
-						사용자를 불러오는 중입니다.
+						<FormattedMessage
+							id="access.user.loading"
+							defaultMessage="사용자를 불러오는 중입니다."
+						/>
 					</output>
 				) : error ? (
 					<p
 						role="alert"
 						className="px-5 py-12 text-center text-sm text-destructive"
 					>
-						{error instanceof HTTPError && error.response.status === 403
-							? "사용자 목록을 볼 권한이 없습니다."
-							: "사용자 목록을 불러오지 못했습니다."}
+						{error instanceof HTTPError && error.response.status === 403 ? (
+							<FormattedMessage
+								id="access.user.forbidden"
+								defaultMessage="사용자 목록을 볼 권한이 없습니다."
+							/>
+						) : (
+							<FormattedMessage
+								id="access.user.loadFailed"
+								defaultMessage="사용자 목록을 불러오지 못했습니다."
+							/>
+						)}
 					</p>
 				) : data.items.length === 0 ? (
 					<p className="px-5 py-12 text-center text-sm text-slate-500">
-						{q || status
-							? "검색 결과가 없습니다."
-							: "등록된 사용자가 없습니다."}
+						{q || status ? (
+							<FormattedMessage
+								id="common.searchEmpty"
+								defaultMessage="검색 결과가 없습니다."
+							/>
+						) : (
+							<FormattedMessage
+								id="access.user.empty"
+								defaultMessage="등록된 사용자가 없습니다."
+							/>
+						)}
 					</p>
 				) : (
 					<div className="overflow-x-auto">
 						<Table className="min-w-[860px]">
 							<TableHeader className="bg-slate-50 text-xs text-slate-500">
 								<TableRow>
-									<TableHead className="px-5 sm:px-6">이름</TableHead>
-									<TableHead className="px-5 sm:px-6">이메일</TableHead>
-									<TableHead className="px-5 sm:px-6">상태</TableHead>
-									<TableHead className="px-5 sm:px-6">롤</TableHead>
-									<TableHead className="px-5 sm:px-6">로그인 수단</TableHead>
-									<TableHead className="px-5 sm:px-6">마지막 로그인</TableHead>
+									<TableHead className="px-5 sm:px-6">
+										<FormattedMessage
+											id="access.user.name"
+											defaultMessage="이름"
+										/>
+									</TableHead>
+									<TableHead className="px-5 sm:px-6">
+										<FormattedMessage
+											id="access.user.email"
+											defaultMessage="이메일"
+										/>
+									</TableHead>
+									<TableHead className="px-5 sm:px-6">
+										<FormattedMessage
+											id="access.user.status"
+											defaultMessage="상태"
+										/>
+									</TableHead>
+									<TableHead className="px-5 sm:px-6">
+										<FormattedMessage id="common.roles" defaultMessage="롤" />
+									</TableHead>
+									<TableHead className="px-5 sm:px-6">
+										<FormattedMessage
+											id="access.user.providers"
+											defaultMessage="로그인 수단"
+										/>
+									</TableHead>
+									<TableHead className="px-5 sm:px-6">
+										<FormattedMessage
+											id="access.user.lastLogin"
+											defaultMessage="마지막 로그인"
+										/>
+									</TableHead>
 									<TableHead className="w-16 px-5 text-right sm:px-6">
-										작업
+										<FormattedMessage
+											id="common.actions"
+											defaultMessage="작업"
+										/>
 									</TableHead>
 								</TableRow>
 							</TableHeader>
@@ -231,14 +332,20 @@ export function UserPage() {
 										</TableCell>
 										<TableCell className="px-5 py-4 text-slate-600 sm:px-6">
 											{user.latest_login_at
-												? loginDateFormat.format(new Date(user.latest_login_at))
-												: "기록 없음"}
+												? intl.formatDate(new Date(user.latest_login_at), {
+														dateStyle: "medium",
+														timeStyle: "short",
+													})
+												: intl.formatMessage({
+														id: "access.user.noLogin",
+														defaultMessage: "기록 없음",
+													})}
 										</TableCell>
 										<TableCell className="px-5 py-4 text-right sm:px-6">
 											<DropdownMenu>
 												<DropdownMenuTrigger
 													render={<Button variant="ghost" size="icon-sm" />}
-													aria-label={`${user.email} 작업`}
+													aria-label={`${user.email} ${intl.formatMessage({ id: "common.actions", defaultMessage: "작업" })}`}
 												>
 													<MoreHorizontalIcon />
 												</DropdownMenuTrigger>
@@ -251,7 +358,11 @@ export function UserPage() {
 															})
 														}
 													>
-														<KeyRoundIcon /> 롤 관리
+														<KeyRoundIcon />{" "}
+														<FormattedMessage
+															id="access.user.manageRoles"
+															defaultMessage="롤 관리"
+														/>
 													</DropdownMenuItem>
 													{user.status !== "withdrawn" &&
 														user.email !== "admin@localhost" && (
@@ -262,9 +373,17 @@ export function UserPage() {
 																}}
 															>
 																<PowerIcon />{" "}
-																{user.status === "active"
-																	? "계정 비활성화"
-																	: "계정 활성화"}
+																{user.status === "active" ? (
+																	<FormattedMessage
+																		id="access.user.suspend"
+																		defaultMessage="계정 비활성화"
+																	/>
+																) : (
+																	<FormattedMessage
+																		id="access.user.activate"
+																		defaultMessage="계정 활성화"
+																	/>
+																)}
 															</DropdownMenuItem>
 														)}
 												</DropdownMenuContent>
@@ -282,8 +401,14 @@ export function UserPage() {
 							<PaginationItem>
 								<PaginationPrevious
 									href="#"
-									text="이전"
-									aria-label="이전 페이지"
+									text={intl.formatMessage({
+										id: "common.previous",
+										defaultMessage: "이전",
+									})}
+									aria-label={intl.formatMessage({
+										id: "common.previousPage",
+										defaultMessage: "이전 페이지",
+									})}
 									aria-disabled={page <= 1 || isPending}
 									tabIndex={page <= 1 || isPending ? -1 : undefined}
 									onClick={(event) => {
@@ -297,7 +422,10 @@ export function UserPage() {
 									<PaginationLink
 										href="#"
 										isActive={visiblePage === page}
-										aria-label={`${visiblePage} 페이지`}
+										aria-label={intl.formatMessage(
+											{ id: "common.page", defaultMessage: "{page} 페이지" },
+											{ page: visiblePage },
+										)}
 										aria-disabled={isPending}
 										tabIndex={isPending ? -1 : undefined}
 										onClick={(event) => {
@@ -312,8 +440,14 @@ export function UserPage() {
 							<PaginationItem>
 								<PaginationNext
 									href="#"
-									text="다음"
-									aria-label="다음 페이지"
+									text={intl.formatMessage({
+										id: "common.next",
+										defaultMessage: "다음",
+									})}
+									aria-label={intl.formatMessage({
+										id: "common.nextPage",
+										defaultMessage: "다음 페이지",
+									})}
 									aria-disabled={!data || page >= totalPages || isPending}
 									tabIndex={
 										!data || page >= totalPages || isPending ? -1 : undefined
@@ -338,17 +472,31 @@ export function UserPage() {
 				<AlertDialogContent>
 					<AlertDialogHeader>
 						<AlertDialogTitle>
-							{userToChangeStatus?.status === "active"
-								? "계정을 비활성화할까요?"
-								: "계정을 활성화할까요?"}
+							{userToChangeStatus?.status === "active" ? (
+								<FormattedMessage
+									id="access.user.suspendConfirm"
+									defaultMessage="계정을 비활성화할까요?"
+								/>
+							) : (
+								<FormattedMessage
+									id="access.user.activateConfirm"
+									defaultMessage="계정을 활성화할까요?"
+								/>
+							)}
 						</AlertDialogTitle>
 						<AlertDialogDescription>
-							{userToChangeStatus?.email} 계정의 상태를 변경합니다.
+							<FormattedMessage
+								id="access.user.changeDescription"
+								defaultMessage="{email} 계정의 상태를 변경합니다."
+								values={{ email: userToChangeStatus?.email }}
+							/>
 							{userToChangeStatus?.status === "active" && (
 								<>
 									{" "}
-									현재 로그인 세션은 즉시 종료되지 않으며, 다음 로그인부터
-									차단됩니다.
+									<FormattedMessage
+										id="access.user.suspendNote"
+										defaultMessage="현재 로그인 세션은 즉시 종료되지 않으며, 다음 로그인부터 차단됩니다."
+									/>
 								</>
 							)}
 						</AlertDialogDescription>
@@ -356,14 +504,22 @@ export function UserPage() {
 					{statusChange.isError && (
 						<p role="alert" className="text-sm text-destructive">
 							{statusChange.error instanceof HTTPError &&
-							statusChange.error.response.status === 400
-								? "현재 계정 상태에서는 변경할 수 없습니다. 목록을 새로고침해 주세요."
-								: "계정 상태를 변경하지 못했습니다. 다시 시도해 주세요."}
+							statusChange.error.response.status === 400 ? (
+								<FormattedMessage
+									id="access.user.changeBlocked"
+									defaultMessage="현재 계정 상태에서는 변경할 수 없습니다. 목록을 새로고침해 주세요."
+								/>
+							) : (
+								<FormattedMessage
+									id="access.user.changeFailed"
+									defaultMessage="계정 상태를 변경하지 못했습니다. 다시 시도해 주세요."
+								/>
+							)}
 						</p>
 					)}
 					<AlertDialogFooter>
 						<AlertDialogCancel disabled={statusChange.isPending} autoFocus>
-							취소
+							<FormattedMessage id="common.cancel" defaultMessage="취소" />
 						</AlertDialogCancel>
 						<AlertDialogAction
 							variant={
@@ -384,11 +540,22 @@ export function UserPage() {
 								}
 							}}
 						>
-							{statusChange.isPending
-								? "변경 중..."
-								: userToChangeStatus?.status === "active"
-									? "비활성화"
-									: "활성화"}
+							{statusChange.isPending ? (
+								<FormattedMessage
+									id="access.user.changing"
+									defaultMessage="변경 중..."
+								/>
+							) : userToChangeStatus?.status === "active" ? (
+								<FormattedMessage
+									id="access.user.suspendAction"
+									defaultMessage="비활성화"
+								/>
+							) : (
+								<FormattedMessage
+									id="access.user.activateAction"
+									defaultMessage="활성화"
+								/>
+							)}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

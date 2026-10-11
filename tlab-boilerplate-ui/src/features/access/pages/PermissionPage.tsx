@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { HTTPError } from "ky";
 import { MoreHorizontalIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
+import { FormattedMessage, useIntl } from "react-intl";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -45,6 +46,7 @@ import type { Permission } from "../types";
 const PAGE_SIZE = 20;
 
 export function PermissionPage() {
+	const intl = useIntl();
 	const queryClient = useQueryClient();
 	const [inputCode, setInputCode] = useState("");
 	const [code, setCode] = useState("");
@@ -74,11 +76,26 @@ export function PermissionPage() {
 			<div className="flex flex-wrap items-end justify-between gap-4">
 				<div>
 					<p className="mb-2 text-sm text-slate-500">
-						접근 관리 / <span className="text-slate-900">퍼미션</span>
+						<FormattedMessage
+							id="common.accessManagement"
+							defaultMessage="접근 관리"
+						/>{" "}
+						/{" "}
+						<span className="text-slate-900">
+							<FormattedMessage
+								id="common.permissions"
+								defaultMessage="퍼미션"
+							/>
+						</span>
 					</p>
-					<h1 className="text-3xl font-semibold tracking-tight">퍼미션</h1>
+					<h1 className="text-3xl font-semibold tracking-tight">
+						<FormattedMessage id="common.permissions" defaultMessage="퍼미션" />
+					</h1>
 					<p className="mt-1 text-sm text-slate-500">
-						서비스에서 사용하는 퍼미션을 조회합니다.
+						<FormattedMessage
+							id="access.permission.description"
+							defaultMessage="서비스에서 사용하는 퍼미션을 조회합니다."
+						/>
 					</p>
 				</div>
 				<CreatePermissionDialog />
@@ -87,9 +104,22 @@ export function PermissionPage() {
 			<Card className="gap-0 bg-white py-0 shadow-sm">
 				<CardHeader className="flex flex-col gap-3 border-b border-slate-100 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
 					<div className="flex items-center gap-3">
-						<CardTitle>목록</CardTitle>
+						<CardTitle>
+							<FormattedMessage id="common.list" defaultMessage="목록" />
+						</CardTitle>
 						<span className="text-sm text-slate-500">
-							{data ? `${data.total}개 항목` : "항목 조회 중"}
+							{data ? (
+								<FormattedMessage
+									id="common.itemCount"
+									defaultMessage="{count}개 항목"
+									values={{ count: data.total }}
+								/>
+							) : (
+								<FormattedMessage
+									id="common.loadingItems"
+									defaultMessage="항목 조회 중"
+								/>
+							)}
 						</span>
 					</div>
 					<form
@@ -101,43 +131,79 @@ export function PermissionPage() {
 						}}
 					>
 						<label htmlFor="permission-code" className="sr-only">
-							퍼미션 코드 검색
+							<FormattedMessage
+								id="access.permission.search"
+								defaultMessage="퍼미션 코드 검색"
+							/>
 						</label>
 						<Input
 							id="permission-code"
 							type="search"
-							placeholder="코드 검색"
+							placeholder={intl.formatMessage({
+								id: "common.codeSearch",
+								defaultMessage: "코드 검색",
+							})}
 							value={inputCode}
 							onChange={(event) => setInputCode(event.target.value)}
 						/>
-						<Button type="submit">검색</Button>
+						<Button type="submit">
+							<FormattedMessage id="common.search" defaultMessage="검색" />
+						</Button>
 					</form>
 				</CardHeader>
 				{isPending ? (
 					<output className="block px-5 py-12 text-center text-sm text-slate-500">
-						퍼미션을 불러오는 중입니다.
+						<FormattedMessage
+							id="access.permission.loading"
+							defaultMessage="퍼미션을 불러오는 중입니다."
+						/>
 					</output>
 				) : error ? (
 					<p
 						role="alert"
 						className="px-5 py-12 text-center text-sm text-destructive"
 					>
-						{error instanceof HTTPError && error.response.status === 403
-							? "퍼미션 목록을 볼 권한이 없습니다."
-							: "퍼미션 목록을 불러오지 못했습니다."}
+						{error instanceof HTTPError && error.response.status === 403 ? (
+							<FormattedMessage
+								id="access.permission.forbidden"
+								defaultMessage="퍼미션 목록을 볼 권한이 없습니다."
+							/>
+						) : (
+							<FormattedMessage
+								id="access.permission.loadFailed"
+								defaultMessage="퍼미션 목록을 불러오지 못했습니다."
+							/>
+						)}
 					</p>
 				) : data.items.length === 0 ? (
 					<p className="px-5 py-12 text-center text-sm text-slate-500">
-						{code ? "검색 결과가 없습니다." : "등록된 퍼미션이 없습니다."}
+						{code ? (
+							<FormattedMessage
+								id="common.searchEmpty"
+								defaultMessage="검색 결과가 없습니다."
+							/>
+						) : (
+							<FormattedMessage
+								id="access.permission.empty"
+								defaultMessage="등록된 퍼미션이 없습니다."
+							/>
+						)}
 					</p>
 				) : (
 					<Table className="min-w-[620px]">
 						<TableHeader className="bg-slate-50 text-xs text-slate-500">
 							<TableRow>
-								<TableHead className="px-5 sm:px-6">코드</TableHead>
-								<TableHead className="px-5 sm:px-6">설명</TableHead>
+								<TableHead className="px-5 sm:px-6">
+									<FormattedMessage id="common.code" defaultMessage="코드" />
+								</TableHead>
+								<TableHead className="px-5 sm:px-6">
+									<FormattedMessage
+										id="common.description"
+										defaultMessage="설명"
+									/>
+								</TableHead>
 								<TableHead className="w-16 px-5 text-right sm:px-6">
-									작업
+									<FormattedMessage id="common.actions" defaultMessage="작업" />
 								</TableHead>
 							</TableRow>
 						</TableHeader>
@@ -154,7 +220,7 @@ export function PermissionPage() {
 										<DropdownMenu>
 											<DropdownMenuTrigger
 												render={<Button variant="ghost" size="icon-sm" />}
-												aria-label={`${permission.code} 작업`}
+												aria-label={`${permission.code} ${intl.formatMessage({ id: "common.actions", defaultMessage: "작업" })}`}
 											>
 												<MoreHorizontalIcon />
 											</DropdownMenuTrigger>
@@ -166,7 +232,11 @@ export function PermissionPage() {
 														setPermissionToDelete(permission);
 													}}
 												>
-													<Trash2Icon /> 삭제
+													<Trash2Icon />{" "}
+													<FormattedMessage
+														id="common.delete"
+														defaultMessage="삭제"
+													/>
 												</DropdownMenuItem>
 											</DropdownMenuContent>
 										</DropdownMenu>
@@ -182,8 +252,14 @@ export function PermissionPage() {
 							<PaginationItem>
 								<PaginationPrevious
 									href="#"
-									text="이전"
-									aria-label="이전 페이지"
+									text={intl.formatMessage({
+										id: "common.previous",
+										defaultMessage: "이전",
+									})}
+									aria-label={intl.formatMessage({
+										id: "common.previousPage",
+										defaultMessage: "이전 페이지",
+									})}
 									aria-disabled={page <= 1 || isPending}
 									tabIndex={page <= 1 || isPending ? -1 : undefined}
 									onClick={(event) => {
@@ -197,7 +273,10 @@ export function PermissionPage() {
 									<PaginationLink
 										href="#"
 										isActive={visiblePage === page}
-										aria-label={`${visiblePage} 페이지`}
+										aria-label={intl.formatMessage(
+											{ id: "common.page", defaultMessage: "{page} 페이지" },
+											{ page: visiblePage },
+										)}
 										aria-disabled={isPending}
 										tabIndex={isPending ? -1 : undefined}
 										onClick={(event) => {
@@ -212,8 +291,14 @@ export function PermissionPage() {
 							<PaginationItem>
 								<PaginationNext
 									href="#"
-									text="다음"
-									aria-label="다음 페이지"
+									text={intl.formatMessage({
+										id: "common.next",
+										defaultMessage: "다음",
+									})}
+									aria-label={intl.formatMessage({
+										id: "common.nextPage",
+										defaultMessage: "다음 페이지",
+									})}
 									aria-disabled={!data || page >= totalPages || isPending}
 									tabIndex={
 										!data || page >= totalPages || isPending ? -1 : undefined
@@ -237,20 +322,31 @@ export function PermissionPage() {
 			>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>퍼미션을 삭제할까요?</AlertDialogTitle>
+						<AlertDialogTitle>
+							<FormattedMessage
+								id="access.permission.deleteConfirm"
+								defaultMessage="퍼미션을 삭제할까요?"
+							/>
+						</AlertDialogTitle>
 						<AlertDialogDescription>
-							{permissionToDelete?.code} 퍼미션을 삭제하면 모든 롤에서 연결이
-							제거됩니다. 이 작업은 되돌릴 수 없습니다.
+							<FormattedMessage
+								id="access.permission.deleteDescription"
+								defaultMessage="{code} 퍼미션을 삭제하면 모든 롤에서 연결이 제거됩니다. 이 작업은 되돌릴 수 없습니다."
+								values={{ code: permissionToDelete?.code }}
+							/>
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					{deletion.isError && (
 						<p role="alert" className="text-sm text-destructive">
-							퍼미션을 삭제하지 못했습니다. 다시 시도해 주세요.
+							<FormattedMessage
+								id="access.permission.deleteFailed"
+								defaultMessage="퍼미션을 삭제하지 못했습니다. 다시 시도해 주세요."
+							/>
 						</p>
 					)}
 					<AlertDialogFooter>
 						<AlertDialogCancel disabled={deletion.isPending} autoFocus>
-							취소
+							<FormattedMessage id="common.cancel" defaultMessage="취소" />
 						</AlertDialogCancel>
 						<AlertDialogAction
 							variant="destructive"
@@ -259,7 +355,14 @@ export function PermissionPage() {
 								if (permissionToDelete) deletion.mutate(permissionToDelete.id);
 							}}
 						>
-							{deletion.isPending ? "삭제 중..." : "삭제"}
+							{deletion.isPending ? (
+								<FormattedMessage
+									id="common.deleting"
+									defaultMessage="삭제 중..."
+								/>
+							) : (
+								<FormattedMessage id="common.delete" defaultMessage="삭제" />
+							)}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

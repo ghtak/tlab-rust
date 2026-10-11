@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
 import ReactDOM from "react-dom/client";
+import { AppIntlProvider } from "./lib/AppIntlProvider";
 import { getRouter } from "./router";
 
 const rootElement = document.getElementById("app");
@@ -16,7 +17,9 @@ if (!rootElement.innerHTML) {
 	const root = ReactDOM.createRoot(rootElement);
 	root.render(
 		<QueryClientProvider client={queryClient}>
-			<RouterProvider router={router} />
+			<AppIntlProvider>
+				<RouterProvider router={router} />
+			</AppIntlProvider>
 		</QueryClientProvider>,
 	);
 }

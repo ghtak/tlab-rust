@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { HTTPError } from "ky";
 import { useEffect, useState } from "react";
+import { FormattedMessage, useIntl } from "react-intl";
 import { Button } from "../../../components/ui/button";
 import { Card, CardHeader, CardTitle } from "../../../components/ui/card";
 import { Checkbox } from "../../../components/ui/checkbox";
@@ -28,14 +29,38 @@ export function UserRolePage({ userId }: { userId: number }) {
 		enabled: validUserId,
 	});
 
-	if (!validUserId) return <p role="alert">잘못된 사용자 주소입니다.</p>;
-	if (isPending) return <p>사용자의 롤을 불러오는 중입니다.</p>;
+	if (!validUserId)
+		return (
+			<p role="alert">
+				<FormattedMessage
+					id="access.userRoles.invalidAddress"
+					defaultMessage="잘못된 사용자 주소입니다."
+				/>
+			</p>
+		);
+	if (isPending)
+		return (
+			<p>
+				<FormattedMessage
+					id="access.userRoles.loading"
+					defaultMessage="사용자의 롤을 불러오는 중입니다."
+				/>
+			</p>
+		);
 	if (error) {
 		return (
 			<p role="alert">
-				{error instanceof HTTPError && error.response.status === 404
-					? "사용자를 찾을 수 없습니다."
-					: "사용자의 롤을 불러오지 못했습니다."}
+				{error instanceof HTTPError && error.response.status === 404 ? (
+					<FormattedMessage
+						id="access.userRoles.notFound"
+						defaultMessage="사용자를 찾을 수 없습니다."
+					/>
+				) : (
+					<FormattedMessage
+						id="access.userRoles.loadFailed"
+						defaultMessage="사용자의 롤을 불러오지 못했습니다."
+					/>
+				)}
 			</p>
 		);
 	}
@@ -43,6 +68,7 @@ export function UserRolePage({ userId }: { userId: number }) {
 }
 
 function UserRoleEditor({ initial }: { initial: UserRoles }) {
+	const intl = useIntl();
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
 	const router = useRouter();
@@ -100,30 +126,51 @@ function UserRoleEditor({ initial }: { initial: UserRoles }) {
 		<div className="space-y-5">
 			<div>
 				<p className="mb-2 text-sm text-slate-500">
-					접근 관리 /{" "}
+					<FormattedMessage
+						id="common.accessManagement"
+						defaultMessage="접근 관리"
+					/>{" "}
+					/{" "}
 					<Link to="/users" className="hover:underline">
-						사용자
+						<FormattedMessage id="common.users" defaultMessage="사용자" />
 					</Link>{" "}
-					/ {initial.user.name} / 롤 관리
+					/ {initial.user.name} /{" "}
+					<FormattedMessage
+						id="access.user.manageRoles"
+						defaultMessage="롤 관리"
+					/>
 				</p>
 				<h1 className="text-3xl font-semibold tracking-tight">
-					{initial.user.name} 롤 관리
+					{initial.user.name}{" "}
+					<FormattedMessage
+						id="access.user.manageRoles"
+						defaultMessage="롤 관리"
+					/>
 				</h1>
 				<p className="mt-1 text-sm text-slate-500">
-					{initial.user.email} · 현재 {selected.size}개 롤이 연결되었습니다.
+					<FormattedMessage
+						id="access.userRoles.connected"
+						defaultMessage="{email} · 현재 {count}개 롤이 연결되었습니다."
+						values={{ email: initial.user.email, count: selected.size }}
+					/>
 				</p>
 			</div>
 			<Card className="gap-0 bg-white py-0 shadow-sm">
 				<CardHeader className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 py-4 sm:px-6">
 					<div className="flex items-center gap-3">
-						<CardTitle>롤 선택</CardTitle>
+						<CardTitle>
+							<FormattedMessage
+								id="access.userRoles.select"
+								defaultMessage="롤 선택"
+							/>
+						</CardTitle>
 						<Button
 							variant={filter === "all" ? "secondary" : "ghost"}
 							size="sm"
 							aria-pressed={filter === "all"}
 							onClick={() => setFilter("all")}
 						>
-							전체
+							<FormattedMessage id="common.all" defaultMessage="전체" />
 						</Button>
 						<Button
 							variant={filter === "linked" ? "secondary" : "ghost"}
@@ -131,7 +178,7 @@ function UserRoleEditor({ initial }: { initial: UserRoles }) {
 							aria-pressed={filter === "linked"}
 							onClick={() => setFilter("linked")}
 						>
-							연결됨
+							<FormattedMessage id="common.linked" defaultMessage="연결됨" />
 						</Button>
 					</div>
 					<form
@@ -143,32 +190,49 @@ function UserRoleEditor({ initial }: { initial: UserRoles }) {
 						}}
 					>
 						<label htmlFor="user-role-code" className="sr-only">
-							롤 코드 검색
+							<FormattedMessage
+								id="access.role.search"
+								defaultMessage="롤 코드 검색"
+							/>
 						</label>
 						<Input
 							id="user-role-code"
 							type="search"
-							placeholder="코드 검색"
+							placeholder={intl.formatMessage({
+								id: "common.codeSearch",
+								defaultMessage: "코드 검색",
+							})}
 							value={inputCode}
 							onChange={(event) => setInputCode(event.target.value)}
 						/>
-						<Button type="submit">검색</Button>
+						<Button type="submit">
+							<FormattedMessage id="common.search" defaultMessage="검색" />
+						</Button>
 					</form>
 				</CardHeader>
 				{filter === "all" && catalog.isPending ? (
 					<output className="block px-5 py-12 text-center text-sm text-slate-500">
-						롤을 불러오는 중입니다.
+						<FormattedMessage
+							id="access.role.loading"
+							defaultMessage="롤을 불러오는 중입니다."
+						/>
 					</output>
 				) : filter === "all" && catalog.error ? (
 					<p
 						role="alert"
 						className="px-5 py-12 text-center text-sm text-destructive"
 					>
-						롤 목록을 불러오지 못했습니다.
+						<FormattedMessage
+							id="access.role.loadFailed"
+							defaultMessage="롤 목록을 불러오지 못했습니다."
+						/>
 					</p>
 				) : items.length === 0 ? (
 					<p className="px-5 py-12 text-center text-sm text-slate-500">
-						표시할 롤이 없습니다.
+						<FormattedMessage
+							id="access.userRoles.empty"
+							defaultMessage="표시할 롤이 없습니다."
+						/>
 					</p>
 				) : (
 					<div className="divide-y divide-slate-100">
@@ -201,9 +265,18 @@ function UserRoleEditor({ initial }: { initial: UserRoles }) {
 									>
 										<span className="block font-medium">{role.code}</span>
 										<span className="block text-sm text-slate-500">
-											{protectedRole
-												? "초기 관리자 계정에서 해제할 수 없습니다."
-												: (role.description ?? "설명 없음")}
+											{protectedRole ? (
+												<FormattedMessage
+													id="access.userRoles.protected"
+													defaultMessage="초기 관리자 계정에서 해제할 수 없습니다."
+												/>
+											) : (
+												(role.description ??
+												intl.formatMessage({
+													id: "common.noDescription",
+													defaultMessage: "설명 없음",
+												}))
+											)}
 										</span>
 									</label>
 								</div>
@@ -218,8 +291,14 @@ function UserRoleEditor({ initial }: { initial: UserRoles }) {
 								<PaginationItem>
 									<PaginationPrevious
 										href="#"
-										text="이전"
-										aria-label="이전 페이지"
+										text={intl.formatMessage({
+											id: "common.previous",
+											defaultMessage: "이전",
+										})}
+										aria-label={intl.formatMessage({
+											id: "common.previousPage",
+											defaultMessage: "이전 페이지",
+										})}
 										aria-disabled={page <= 1 || catalog.isPending}
 										tabIndex={page <= 1 || catalog.isPending ? -1 : undefined}
 										onClick={(event) => {
@@ -232,7 +311,10 @@ function UserRoleEditor({ initial }: { initial: UserRoles }) {
 									<PaginationLink
 										href="#"
 										isActive
-										aria-label={`${page} 페이지`}
+										aria-label={intl.formatMessage(
+											{ id: "common.page", defaultMessage: "{page} 페이지" },
+											{ page },
+										)}
 										onClick={(event) => event.preventDefault()}
 									>
 										{page}
@@ -241,8 +323,14 @@ function UserRoleEditor({ initial }: { initial: UserRoles }) {
 								<PaginationItem>
 									<PaginationNext
 										href="#"
-										text="다음"
-										aria-label="다음 페이지"
+										text={intl.formatMessage({
+											id: "common.next",
+											defaultMessage: "다음",
+										})}
+										aria-label={intl.formatMessage({
+											id: "common.nextPage",
+											defaultMessage: "다음 페이지",
+										})}
 										aria-disabled={page >= totalPages || catalog.isPending}
 										tabIndex={
 											page >= totalPages || catalog.isPending ? -1 : undefined
@@ -261,7 +349,11 @@ function UserRoleEditor({ initial }: { initial: UserRoles }) {
 			</Card>
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<p className="text-sm text-slate-600">
-					변경: 추가 {addIds.length}개 · 해제 {removeIds.length}개
+					<FormattedMessage
+						id="common.changeSummary"
+						defaultMessage="변경: 추가 {added}개 · 해제 {removed}개"
+						values={{ added: addIds.length, removed: removeIds.length }}
+					/>
 				</p>
 				<div className="flex gap-2">
 					<Button
@@ -269,7 +361,7 @@ function UserRoleEditor({ initial }: { initial: UserRoles }) {
 						disabled={save.isPending}
 						onClick={() => void navigate({ to: "/users" })}
 					>
-						취소
+						<FormattedMessage id="common.cancel" defaultMessage="취소" />
 					</Button>
 					<Button
 						disabled={
@@ -282,15 +374,31 @@ function UserRoleEditor({ initial }: { initial: UserRoles }) {
 							})
 						}
 					>
-						{save.isPending ? "저장 중..." : "저장"}
+						{save.isPending ? (
+							<FormattedMessage
+								id="common.saving"
+								defaultMessage="저장 중..."
+							/>
+						) : (
+							<FormattedMessage id="common.save" defaultMessage="저장" />
+						)}
 					</Button>
 				</div>
 			</div>
 			{save.isError && (
 				<p role="alert" className="text-sm text-destructive">
-					{save.error instanceof HTTPError && save.error.response.status === 400
-						? "선택한 롤과 변경 내용을 확인해 주세요."
-						: "변경 사항을 저장하지 못했습니다. 다시 시도해 주세요."}
+					{save.error instanceof HTTPError &&
+					save.error.response.status === 400 ? (
+						<FormattedMessage
+							id="access.userRoles.invalidSelection"
+							defaultMessage="선택한 롤과 변경 내용을 확인해 주세요."
+						/>
+					) : (
+						<FormattedMessage
+							id="access.userRoles.saveFailed"
+							defaultMessage="변경 사항을 저장하지 못했습니다. 다시 시도해 주세요."
+						/>
+					)}
 				</p>
 			)}
 		</div>

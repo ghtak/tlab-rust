@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { HTTPError } from "ky";
 import { useEffect, useState } from "react";
+import { FormattedMessage, useIntl } from "react-intl";
 import { Button } from "../../../components/ui/button";
 import { Card, CardHeader, CardTitle } from "../../../components/ui/card";
 import { Checkbox } from "../../../components/ui/checkbox";
@@ -29,15 +30,38 @@ export function RolePermissionPage({ roleId }: { roleId: number }) {
 	});
 
 	if (!validRoleId) {
-		return <p role="alert">잘못된 롤 주소입니다.</p>;
+		return (
+			<p role="alert">
+				<FormattedMessage
+					id="access.rolePermissions.invalidAddress"
+					defaultMessage="잘못된 롤 주소입니다."
+				/>
+			</p>
+		);
 	}
-	if (isPending) return <p>롤의 퍼미션을 불러오는 중입니다.</p>;
+	if (isPending)
+		return (
+			<p>
+				<FormattedMessage
+					id="access.rolePermissions.loading"
+					defaultMessage="롤의 퍼미션을 불러오는 중입니다."
+				/>
+			</p>
+		);
 	if (error) {
 		return (
 			<p role="alert">
-				{error instanceof HTTPError && error.response.status === 404
-					? "롤을 찾을 수 없습니다."
-					: "롤의 퍼미션을 불러오지 못했습니다."}
+				{error instanceof HTTPError && error.response.status === 404 ? (
+					<FormattedMessage
+						id="access.rolePermissions.notFound"
+						defaultMessage="롤을 찾을 수 없습니다."
+					/>
+				) : (
+					<FormattedMessage
+						id="access.rolePermissions.loadFailed"
+						defaultMessage="롤의 퍼미션을 불러오지 못했습니다."
+					/>
+				)}
 			</p>
 		);
 	}
@@ -45,6 +69,7 @@ export function RolePermissionPage({ roleId }: { roleId: number }) {
 }
 
 function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
+	const intl = useIntl();
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
 	const router = useRouter();
@@ -108,30 +133,51 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 		<div className="space-y-5">
 			<div>
 				<p className="mb-2 text-sm text-slate-500">
-					접근 관리 /{" "}
+					<FormattedMessage
+						id="common.accessManagement"
+						defaultMessage="접근 관리"
+					/>{" "}
+					/{" "}
 					<Link to="/roles" className="hover:underline">
-						롤
+						<FormattedMessage id="common.roles" defaultMessage="롤" />
 					</Link>{" "}
-					/ {initial.role.code} / 퍼미션 관리
+					/ {initial.role.code} /{" "}
+					<FormattedMessage
+						id="access.role.managePermissions"
+						defaultMessage="퍼미션 관리"
+					/>
 				</p>
 				<h1 className="text-3xl font-semibold tracking-tight">
-					{initial.role.code} 퍼미션 관리
+					{initial.role.code}{" "}
+					<FormattedMessage
+						id="access.role.managePermissions"
+						defaultMessage="퍼미션 관리"
+					/>
 				</h1>
 				<p className="mt-1 text-sm text-slate-500">
-					현재 {selected.size}개 퍼미션이 연결됩니다.
+					<FormattedMessage
+						id="access.rolePermissions.connected"
+						defaultMessage="현재 {count}개 퍼미션이 연결됩니다."
+						values={{ count: selected.size }}
+					/>
 				</p>
 			</div>
 			<Card className="gap-0 bg-white py-0 shadow-sm">
 				<CardHeader className="flex flex-col gap-3 border-b border-slate-100 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
 					<div className="flex items-center gap-3">
-						<CardTitle>퍼미션 선택</CardTitle>
+						<CardTitle>
+							<FormattedMessage
+								id="access.rolePermissions.select"
+								defaultMessage="퍼미션 선택"
+							/>
+						</CardTitle>
 						<Button
 							variant={filter === "all" ? "secondary" : "ghost"}
 							size="sm"
 							aria-pressed={filter === "all"}
 							onClick={() => setFilter("all")}
 						>
-							전체
+							<FormattedMessage id="common.all" defaultMessage="전체" />
 						</Button>
 						<Button
 							variant={filter === "linked" ? "secondary" : "ghost"}
@@ -139,7 +185,7 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 							aria-pressed={filter === "linked"}
 							onClick={() => setFilter("linked")}
 						>
-							연결됨
+							<FormattedMessage id="common.linked" defaultMessage="연결됨" />
 						</Button>
 					</div>
 					<form
@@ -151,32 +197,49 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 						}}
 					>
 						<label htmlFor="role-permission-code" className="sr-only">
-							퍼미션 코드 검색
+							<FormattedMessage
+								id="access.permission.search"
+								defaultMessage="퍼미션 코드 검색"
+							/>
 						</label>
 						<Input
 							id="role-permission-code"
 							type="search"
-							placeholder="코드 검색"
+							placeholder={intl.formatMessage({
+								id: "common.codeSearch",
+								defaultMessage: "코드 검색",
+							})}
 							value={inputCode}
 							onChange={(event) => setInputCode(event.target.value)}
 						/>
-						<Button type="submit">검색</Button>
+						<Button type="submit">
+							<FormattedMessage id="common.search" defaultMessage="검색" />
+						</Button>
 					</form>
 				</CardHeader>
 				{filter === "all" && catalog.isPending ? (
 					<output className="block px-5 py-12 text-center text-sm text-slate-500">
-						퍼미션을 불러오는 중입니다.
+						<FormattedMessage
+							id="access.permission.loading"
+							defaultMessage="퍼미션을 불러오는 중입니다."
+						/>
 					</output>
 				) : filter === "all" && catalog.error ? (
 					<p
 						role="alert"
 						className="px-5 py-12 text-center text-sm text-destructive"
 					>
-						퍼미션 목록을 불러오지 못했습니다.
+						<FormattedMessage
+							id="access.permission.loadFailed"
+							defaultMessage="퍼미션 목록을 불러오지 못했습니다."
+						/>
 					</p>
 				) : items.length === 0 ? (
 					<p className="px-5 py-12 text-center text-sm text-slate-500">
-						표시할 퍼미션이 없습니다.
+						<FormattedMessage
+							id="access.rolePermissions.empty"
+							defaultMessage="표시할 퍼미션이 없습니다."
+						/>
 					</p>
 				) : (
 					<div className="divide-y divide-slate-100">
@@ -209,9 +272,18 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 									>
 										<span className="block font-medium">{permission.code}</span>
 										<span className="block text-sm text-slate-500">
-											{protectedPermission
-												? "기본 관리자 롤에서 해제할 수 없습니다."
-												: (permission.description ?? "설명 없음")}
+											{protectedPermission ? (
+												<FormattedMessage
+													id="access.rolePermissions.protected"
+													defaultMessage="기본 관리자 롤에서 해제할 수 없습니다."
+												/>
+											) : (
+												(permission.description ??
+												intl.formatMessage({
+													id: "common.noDescription",
+													defaultMessage: "설명 없음",
+												}))
+											)}
 										</span>
 									</label>
 								</div>
@@ -226,8 +298,14 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 								<PaginationItem>
 									<PaginationPrevious
 										href="#"
-										text="이전"
-										aria-label="이전 페이지"
+										text={intl.formatMessage({
+											id: "common.previous",
+											defaultMessage: "이전",
+										})}
+										aria-label={intl.formatMessage({
+											id: "common.previousPage",
+											defaultMessage: "이전 페이지",
+										})}
 										aria-disabled={page <= 1 || catalog.isPending}
 										tabIndex={page <= 1 || catalog.isPending ? -1 : undefined}
 										onClick={(event) => {
@@ -240,7 +318,10 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 									<PaginationLink
 										href="#"
 										isActive
-										aria-label={`${page} 페이지`}
+										aria-label={intl.formatMessage(
+											{ id: "common.page", defaultMessage: "{page} 페이지" },
+											{ page },
+										)}
 										onClick={(event) => event.preventDefault()}
 									>
 										{page}
@@ -249,8 +330,14 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 								<PaginationItem>
 									<PaginationNext
 										href="#"
-										text="다음"
-										aria-label="다음 페이지"
+										text={intl.formatMessage({
+											id: "common.next",
+											defaultMessage: "다음",
+										})}
+										aria-label={intl.formatMessage({
+											id: "common.nextPage",
+											defaultMessage: "다음 페이지",
+										})}
 										aria-disabled={page >= totalPages || catalog.isPending}
 										tabIndex={
 											page >= totalPages || catalog.isPending ? -1 : undefined
@@ -269,7 +356,11 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 			</Card>
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<p className="text-sm text-slate-600">
-					변경: 추가 {addIds.length}개 · 해제 {removeIds.length}개
+					<FormattedMessage
+						id="common.changeSummary"
+						defaultMessage="변경: 추가 {added}개 · 해제 {removed}개"
+						values={{ added: addIds.length, removed: removeIds.length }}
+					/>
 				</p>
 				<div className="flex gap-2">
 					<Button
@@ -277,7 +368,7 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 						disabled={save.isPending}
 						onClick={() => void navigate({ to: "/roles" })}
 					>
-						취소
+						<FormattedMessage id="common.cancel" defaultMessage="취소" />
 					</Button>
 					<Button
 						disabled={
@@ -290,15 +381,31 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 							})
 						}
 					>
-						{save.isPending ? "저장 중..." : "저장"}
+						{save.isPending ? (
+							<FormattedMessage
+								id="common.saving"
+								defaultMessage="저장 중..."
+							/>
+						) : (
+							<FormattedMessage id="common.save" defaultMessage="저장" />
+						)}
 					</Button>
 				</div>
 			</div>
 			{save.isError && (
 				<p role="alert" className="text-sm text-destructive">
-					{save.error instanceof HTTPError && save.error.response.status === 400
-						? "선택한 퍼미션과 변경 내용을 확인해 주세요."
-						: "변경사항을 저장하지 못했습니다. 다시 시도해 주세요."}
+					{save.error instanceof HTTPError &&
+					save.error.response.status === 400 ? (
+						<FormattedMessage
+							id="access.rolePermissions.invalidSelection"
+							defaultMessage="선택한 퍼미션과 변경 내용을 확인해 주세요."
+						/>
+					) : (
+						<FormattedMessage
+							id="access.rolePermissions.saveFailed"
+							defaultMessage="변경사항을 저장하지 못했습니다. 다시 시도해 주세요."
+						/>
+					)}
 				</p>
 			)}
 		</div>

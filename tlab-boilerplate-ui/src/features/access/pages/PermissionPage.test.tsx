@@ -6,6 +6,7 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react";
+import { IntlProvider } from "react-intl";
 import { afterEach, expect, test, vi } from "vitest";
 import {
 	createPermission,
@@ -50,9 +51,11 @@ test("코드 검색 시 해당 조건으로 퍼미션 목록을 다시 조회한
 
 	const queryClient = new QueryClient();
 	render(
-		<QueryClientProvider client={queryClient}>
-			<PermissionPage />
-		</QueryClientProvider>,
+		<IntlProvider locale="ko">
+			<QueryClientProvider client={queryClient}>
+				<PermissionPage />
+			</QueryClientProvider>
+		</IntlProvider>,
 	);
 
 	await screen.findByText("role:read");
@@ -92,9 +95,11 @@ test("퍼미션 추가 후 목록을 다시 조회한다", async () => {
 
 	const queryClient = new QueryClient();
 	render(
-		<QueryClientProvider client={queryClient}>
-			<PermissionPage />
-		</QueryClientProvider>,
+		<IntlProvider locale="ko">
+			<QueryClientProvider client={queryClient}>
+				<PermissionPage />
+			</QueryClientProvider>
+		</IntlProvider>,
 	);
 
 	await screen.findByText("등록된 퍼미션이 없습니다.");
@@ -131,9 +136,11 @@ test("행 메뉴에서 확인 후 퍼미션을 삭제하고 목록을 갱신한�
 
 	const queryClient = new QueryClient();
 	render(
-		<QueryClientProvider client={queryClient}>
-			<PermissionPage />
-		</QueryClientProvider>,
+		<IntlProvider locale="ko">
+			<QueryClientProvider client={queryClient}>
+				<PermissionPage />
+			</QueryClientProvider>
+		</IntlProvider>,
 	);
 
 	await screen.findByText("role:read");
