@@ -132,7 +132,7 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 	return (
 		<div className="space-y-5">
 			<div>
-				<p className="mb-2 text-sm text-slate-500">
+				<p className="mb-2 text-sm text-muted-foreground">
 					<FormattedMessage
 						id="common.accessManagement"
 						defaultMessage="접근 관리"
@@ -154,7 +154,7 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 						defaultMessage="퍼미션 관리"
 					/>
 				</h1>
-				<p className="mt-1 text-sm text-slate-500">
+				<p className="mt-1 text-sm text-muted-foreground">
 					<FormattedMessage
 						id="access.rolePermissions.connected"
 						defaultMessage="현재 {count}개 퍼미션이 연결됩니다."
@@ -162,8 +162,8 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 					/>
 				</p>
 			</div>
-			<Card className="gap-0 bg-white py-0 shadow-sm">
-				<CardHeader className="flex flex-col gap-3 border-b border-slate-100 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+			<Card className="gap-0 bg-card py-0 shadow-sm">
+				<CardHeader className="flex flex-col gap-3 border-b border-border py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
 					<div className="flex items-center gap-3">
 						<CardTitle>
 							<FormattedMessage
@@ -218,7 +218,7 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 					</form>
 				</CardHeader>
 				{filter === "all" && catalog.isPending ? (
-					<output className="block px-5 py-12 text-center text-sm text-slate-500">
+					<output className="block px-5 py-12 text-center text-sm text-muted-foreground">
 						<FormattedMessage
 							id="access.permission.loading"
 							defaultMessage="퍼미션을 불러오는 중입니다."
@@ -235,7 +235,7 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 						/>
 					</p>
 				) : items.length === 0 ? (
-					<p className="px-5 py-12 text-center text-sm text-slate-500">
+					<p className="px-5 py-12 text-center text-sm text-muted-foreground">
 						<FormattedMessage
 							id="access.rolePermissions.empty"
 							defaultMessage="표시할 퍼미션이 없습니다."
@@ -271,7 +271,7 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 										className="min-w-0 flex-1 cursor-pointer"
 									>
 										<span className="block font-medium">{permission.code}</span>
-										<span className="block text-sm text-slate-500">
+										<span className="block text-sm text-muted-foreground">
 											{protectedPermission ? (
 												<FormattedMessage
 													id="access.rolePermissions.protected"
@@ -292,7 +292,7 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 					</div>
 				)}
 				{filter === "all" && (
-					<div className="border-t border-slate-100 px-5 py-4 sm:px-6">
+					<div className="border-t border-border px-5 py-4 sm:px-6">
 						<Pagination>
 							<PaginationContent>
 								<PaginationItem>
@@ -355,7 +355,7 @@ function RolePermissionEditor({ initial }: { initial: RolePermissions }) {
 				)}
 			</Card>
 			<div className="flex flex-wrap items-center justify-between gap-3">
-				<p className="text-sm text-slate-600">
+				<p className="text-sm text-muted-foreground">
 					<FormattedMessage
 						id="common.changeSummary"
 						defaultMessage="변경: 추가 {added}개 · 해제 {removed}개"

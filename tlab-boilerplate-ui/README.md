@@ -21,6 +21,8 @@ npm run dev
 
 인증 흐름은 [`docs/explain/login-auth-flow.md`](docs/explain/login-auth-flow.md)를 참고한다. 백엔드 기능의 계층과 연결 지점은 [`../tlab-boilerplate/docs/feature-structure.md`](../tlab-boilerplate/docs/feature-structure.md)에 정리되어 있다.
 
+새 화면의 색상과 스타일은 [UI 테마와 스타일 작성](docs/explain/theme-styling.md)을 참고한다.
+
 ## UI 프로젝트 생성 기록
 
 현재 UI 프로젝트를 생성할 때 사용한 명령이다. 기존 프로젝트를 실행할 때 다시 실행할 필요는 없다.

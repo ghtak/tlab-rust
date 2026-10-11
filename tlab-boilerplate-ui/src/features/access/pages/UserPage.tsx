@@ -51,9 +51,9 @@ import type { User, UserStatus } from "../types";
 const PAGE_SIZE = 20;
 
 const statusStyles: Record<UserStatus, string> = {
-	active: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-	suspended: "bg-amber-50 text-amber-700 ring-amber-200",
-	withdrawn: "bg-slate-100 text-slate-600 ring-slate-200",
+	active: "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:ring-emerald-800",
+	suspended: "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:ring-amber-800",
+	withdrawn: "bg-muted text-muted-foreground ring-border",
 };
 
 export function UserPage() {
@@ -101,20 +101,20 @@ export function UserPage() {
 	return (
 		<div className="space-y-5">
 			<div>
-				<p className="mb-2 text-sm text-slate-500">
+				<p className="mb-2 text-sm text-muted-foreground">
 					<FormattedMessage
 						id="common.accessManagement"
 						defaultMessage="접근 관리"
 					/>{" "}
 					/{" "}
-					<span className="text-slate-900">
+					<span className="text-foreground">
 						<FormattedMessage id="common.users" defaultMessage="사용자" />
 					</span>
 				</p>
 				<h1 className="text-3xl font-semibold tracking-tight">
 					<FormattedMessage id="common.users" defaultMessage="사용자" />
 				</h1>
-				<p className="mt-1 text-sm text-slate-500">
+				<p className="mt-1 text-sm text-muted-foreground">
 					<FormattedMessage
 						id="access.user.description"
 						defaultMessage="사용자 계정의 상태와 연결된 롤을 조회합니다."
@@ -122,13 +122,13 @@ export function UserPage() {
 				</p>
 			</div>
 
-			<Card className="gap-0 bg-white py-0 shadow-sm">
-				<CardHeader className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 py-4 sm:px-6">
+			<Card className="gap-0 bg-card py-0 shadow-sm">
+				<CardHeader className="flex flex-wrap items-center justify-between gap-3 border-b border-border py-4 sm:px-6">
 					<div className="flex items-center gap-3">
 						<CardTitle>
 							<FormattedMessage id="common.list" defaultMessage="목록" />
 						</CardTitle>
-						<span className="text-sm text-slate-500">
+						<span className="text-sm text-muted-foreground">
 							{data ? (
 								<FormattedMessage
 									id="common.itemCount"
@@ -223,7 +223,7 @@ export function UserPage() {
 					</div>
 				</CardHeader>
 				{isPending ? (
-					<output className="block px-5 py-12 text-center text-sm text-slate-500">
+					<output className="block px-5 py-12 text-center text-sm text-muted-foreground">
 						<FormattedMessage
 							id="access.user.loading"
 							defaultMessage="사용자를 불러오는 중입니다."
@@ -247,7 +247,7 @@ export function UserPage() {
 						)}
 					</p>
 				) : data.items.length === 0 ? (
-					<p className="px-5 py-12 text-center text-sm text-slate-500">
+					<p className="px-5 py-12 text-center text-sm text-muted-foreground">
 						{q || status ? (
 							<FormattedMessage
 								id="common.searchEmpty"
@@ -263,7 +263,7 @@ export function UserPage() {
 				) : (
 					<div className="overflow-x-auto">
 						<Table className="min-w-[860px]">
-							<TableHeader className="bg-slate-50 text-xs text-slate-500">
+							<TableHeader className="bg-muted/50 text-xs text-muted-foreground">
 								<TableRow>
 									<TableHead className="px-5 sm:px-6">
 										<FormattedMessage
@@ -312,7 +312,7 @@ export function UserPage() {
 										<TableCell className="px-5 py-4 font-medium sm:px-6">
 											{user.name}
 										</TableCell>
-										<TableCell className="px-5 py-4 text-slate-600 sm:px-6">
+										<TableCell className="px-5 py-4 text-muted-foreground sm:px-6">
 											{user.email}
 										</TableCell>
 										<TableCell className="px-5 py-4 sm:px-6">
@@ -322,15 +322,15 @@ export function UserPage() {
 												{statusLabels[user.status]}
 											</span>
 										</TableCell>
-										<TableCell className="px-5 py-4 text-slate-600 sm:px-6">
+										<TableCell className="px-5 py-4 text-muted-foreground sm:px-6">
 											{user.roles.length > 0 ? user.roles.join(", ") : "—"}
 										</TableCell>
-										<TableCell className="px-5 py-4 text-slate-600 sm:px-6">
+										<TableCell className="px-5 py-4 text-muted-foreground sm:px-6">
 											{user.providers.length > 0
 												? user.providers.join(", ")
 												: "—"}
 										</TableCell>
-										<TableCell className="px-5 py-4 text-slate-600 sm:px-6">
+										<TableCell className="px-5 py-4 text-muted-foreground sm:px-6">
 											{user.latest_login_at
 												? intl.formatDate(new Date(user.latest_login_at), {
 														dateStyle: "medium",
@@ -395,7 +395,7 @@ export function UserPage() {
 						</Table>
 					</div>
 				)}
-				<div className="border-t border-slate-100 px-5 py-4 sm:px-6">
+				<div className="border-t border-border px-5 py-4 sm:px-6">
 					<Pagination>
 						<PaginationContent>
 							<PaginationItem>

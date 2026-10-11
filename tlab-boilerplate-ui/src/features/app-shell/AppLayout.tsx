@@ -17,6 +17,7 @@ import {
 import { useState } from "react";
 import { FormattedMessage, useIntl } from "react-intl";
 import { LocaleSelect } from "../../components/LocaleSelect";
+import { ThemeSelect } from "../../components/ThemeSelect";
 import { Button } from "../../components/ui/button";
 import {
 	Collapsible,
@@ -75,8 +76,8 @@ export function AppLayout() {
 	if (!user) return null;
 
 	return (
-		<div className="min-h-screen bg-[#f7f8fa] text-slate-900">
-			<header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 sm:px-6">
+		<div className="min-h-screen bg-background text-foreground">
+			<header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card px-4 sm:px-6">
 				<div className="flex items-center gap-3">
 					<Button
 						variant="ghost"
@@ -94,26 +95,27 @@ export function AppLayout() {
 						to="/"
 						className="flex items-center gap-2.5 font-semibold tracking-tight"
 					>
-						<span className="flex size-8 items-center justify-center rounded-lg bg-slate-900 text-sm font-bold text-white">
+						<span className="flex size-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
 							t
 						</span>
 						<span>tlab</span>
 					</Link>
-					<span className="hidden h-5 w-px bg-slate-200 sm:block" />
-					<span className="hidden text-sm text-slate-500 sm:block">
+					<span className="hidden h-5 w-px bg-border sm:block" />
+					<span className="hidden text-sm text-muted-foreground sm:block">
 						<FormattedMessage id="shell.console" defaultMessage="관리 콘솔" />
 					</span>
 				</div>
 				<div className="flex items-center gap-3">
 					<LocaleSelect />
+					<ThemeSelect />
 					<div className="hidden text-right sm:block">
 						<p className="text-sm font-medium leading-5">{user.name}</p>
-						<p className="max-w-48 truncate text-xs text-slate-500">
+						<p className="max-w-48 truncate text-xs text-muted-foreground">
 							{user.email}
 						</p>
 					</div>
 					<span
-						className="flex size-9 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-700"
+						className="flex size-9 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground"
 						aria-hidden="true"
 					>
 						{user.name.charAt(0)}
@@ -140,7 +142,7 @@ export function AppLayout() {
 			{menuOpen && (
 				<button
 					type="button"
-					className="fixed inset-0 z-40 bg-slate-950/40 md:hidden"
+					className="fixed inset-0 z-40 bg-black/50 md:hidden"
 					aria-label={intl.formatMessage({
 						id: "shell.closeMenu",
 						defaultMessage: "메뉴 닫기",
@@ -149,7 +151,7 @@ export function AppLayout() {
 				/>
 			)}
 			<aside
-				className={`fixed bottom-0 left-0 top-16 z-50 w-60 border-r border-slate-200 bg-white transition-transform md:translate-x-0 ${menuOpen ? "translate-x-0" : "-translate-x-full"}`}
+				className={`fixed bottom-0 left-0 top-16 z-50 w-60 border-r border-border bg-card transition-transform md:translate-x-0 ${menuOpen ? "translate-x-0" : "-translate-x-full"}`}
 			>
 				<nav
 					aria-label={intl.formatMessage({
@@ -176,7 +178,7 @@ export function AppLayout() {
 							to="/"
 							onClick={() => setMenuOpen(false)}
 							aria-current={pathname === "/" ? "page" : undefined}
-							className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${pathname === "/" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}
+							className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${pathname === "/" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
 						>
 							<LayoutDashboard className="size-4" aria-hidden="true" />
 							<FormattedMessage
@@ -191,7 +193,7 @@ export function AppLayout() {
 									({ to }) => to === pathname,
 								)}
 							>
-								<CollapsibleTrigger className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-slate-600 outline-none transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:ring-2 focus-visible:ring-ring">
+								<CollapsibleTrigger className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
 									<ShieldCheck className="size-4" aria-hidden="true" />
 									<span className="flex-1">
 										<FormattedMessage
@@ -205,7 +207,7 @@ export function AppLayout() {
 									/>
 								</CollapsibleTrigger>
 								<CollapsibleContent>
-									<div className="ml-5 mt-1 space-y-1 border-l border-slate-200 pl-3">
+									<div className="ml-5 mt-1 space-y-1 border-l border-border pl-3">
 										{visibleAccessMenuItems.map(
 											({ to, message, icon: Icon }) => (
 												<Link
@@ -213,7 +215,7 @@ export function AppLayout() {
 													to={to}
 													onClick={() => setMenuOpen(false)}
 													aria-current={pathname === to ? "page" : undefined}
-													className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${pathname === to ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}
+													className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${pathname === to ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
 												>
 													<Icon className="size-4" aria-hidden="true" />
 													{intl.formatMessage(message)}
@@ -226,7 +228,7 @@ export function AppLayout() {
 						)}
 					</div>
 				</nav>
-				<div className="absolute bottom-0 w-full border-t border-slate-100 p-4 text-xs text-slate-400">
+				<div className="absolute bottom-0 w-full border-t border-border p-4 text-xs text-muted-foreground">
 					tlab workspace
 				</div>
 			</aside>
@@ -236,7 +238,7 @@ export function AppLayout() {
 					{signOut.isError && (
 						<p
 							role="alert"
-							className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+							className="mb-5 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
 						>
 							<FormattedMessage
 								id="shell.logoutFailed"

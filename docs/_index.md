@@ -8,6 +8,7 @@
 - 역할·퍼미션 모델과 권한 검사 흐름을 확인할 때: [RBAC 구조와 권한 코드](../tlab-boilerplate/docs/rbac.md)
 - UI 화면과 API 연결 지점을 확인할 때: [UI README](../tlab-boilerplate-ui/README.md)
 - [UI 메뉴 표시와 화면 접근 권한](../tlab-boilerplate-ui/docs/explain/permission-visibility.md)
+- 새 UI 화면의 색상과 스타일을 작성할 때: [UI 테마와 스타일 작성](../tlab-boilerplate-ui/docs/explain/theme-styling.md)
 - 로그인 화면, 쿠키, 현재 사용자 조회 흐름을 확인할 때: [로그인 상태 관리](../tlab-boilerplate-ui/docs/explain/login-auth-flow.md)
 - 시스템 대시보드 수집 범위와 API 계약을 확인할 때: [시스템 대시보드와 메트릭 구현안](../tlab-boilerplate/docs/plan/dashboard-metrics-implementation-plan.md)
 

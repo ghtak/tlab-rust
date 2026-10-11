@@ -3,6 +3,7 @@ import { HTTPError } from "ky";
 import { type SubmitEvent, useState } from "react";
 import { FormattedMessage, useIntl } from "react-intl";
 import { LocaleSelect } from "../../../components/LocaleSelect";
+import { ThemeSelect } from "../../../components/ThemeSelect";
 import { Button, buttonVariants } from "../../../components/ui/button";
 import { useLogin } from "../hooks/useLogin";
 
@@ -56,7 +57,10 @@ export function LoginPage() {
 				<div className="mb-8">
 					<div className="flex items-center justify-between">
 						<p className="text-sm font-semibold text-muted-foreground">tlab</p>
-						<LocaleSelect />
+						<div className="flex items-center gap-2">
+							<ThemeSelect />
+							<LocaleSelect />
+						</div>
 					</div>
 					<h1 className="mt-3 text-2xl font-semibold">
 						<FormattedMessage id="auth.login.title" defaultMessage="로그인" />

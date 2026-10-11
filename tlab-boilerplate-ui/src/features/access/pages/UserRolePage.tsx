@@ -125,7 +125,7 @@ function UserRoleEditor({ initial }: { initial: UserRoles }) {
 	return (
 		<div className="space-y-5">
 			<div>
-				<p className="mb-2 text-sm text-slate-500">
+				<p className="mb-2 text-sm text-muted-foreground">
 					<FormattedMessage
 						id="common.accessManagement"
 						defaultMessage="접근 관리"
@@ -147,7 +147,7 @@ function UserRoleEditor({ initial }: { initial: UserRoles }) {
 						defaultMessage="롤 관리"
 					/>
 				</h1>
-				<p className="mt-1 text-sm text-slate-500">
+				<p className="mt-1 text-sm text-muted-foreground">
 					<FormattedMessage
 						id="access.userRoles.connected"
 						defaultMessage="{email} · 현재 {count}개 롤이 연결되었습니다."
@@ -155,8 +155,8 @@ function UserRoleEditor({ initial }: { initial: UserRoles }) {
 					/>
 				</p>
 			</div>
-			<Card className="gap-0 bg-white py-0 shadow-sm">
-				<CardHeader className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 py-4 sm:px-6">
+			<Card className="gap-0 bg-card py-0 shadow-sm">
+				<CardHeader className="flex flex-wrap items-center justify-between gap-3 border-b border-border py-4 sm:px-6">
 					<div className="flex items-center gap-3">
 						<CardTitle>
 							<FormattedMessage
@@ -211,7 +211,7 @@ function UserRoleEditor({ initial }: { initial: UserRoles }) {
 					</form>
 				</CardHeader>
 				{filter === "all" && catalog.isPending ? (
-					<output className="block px-5 py-12 text-center text-sm text-slate-500">
+					<output className="block px-5 py-12 text-center text-sm text-muted-foreground">
 						<FormattedMessage
 							id="access.role.loading"
 							defaultMessage="롤을 불러오는 중입니다."
@@ -228,7 +228,7 @@ function UserRoleEditor({ initial }: { initial: UserRoles }) {
 						/>
 					</p>
 				) : items.length === 0 ? (
-					<p className="px-5 py-12 text-center text-sm text-slate-500">
+					<p className="px-5 py-12 text-center text-sm text-muted-foreground">
 						<FormattedMessage
 							id="access.userRoles.empty"
 							defaultMessage="표시할 롤이 없습니다."
@@ -264,7 +264,7 @@ function UserRoleEditor({ initial }: { initial: UserRoles }) {
 										className="min-w-0 flex-1 cursor-pointer"
 									>
 										<span className="block font-medium">{role.code}</span>
-										<span className="block text-sm text-slate-500">
+										<span className="block text-sm text-muted-foreground">
 											{protectedRole ? (
 												<FormattedMessage
 													id="access.userRoles.protected"
@@ -285,7 +285,7 @@ function UserRoleEditor({ initial }: { initial: UserRoles }) {
 					</div>
 				)}
 				{filter === "all" && (
-					<div className="border-t border-slate-100 px-5 py-4 sm:px-6">
+					<div className="border-t border-border px-5 py-4 sm:px-6">
 						<Pagination>
 							<PaginationContent>
 								<PaginationItem>
@@ -348,7 +348,7 @@ function UserRoleEditor({ initial }: { initial: UserRoles }) {
 				)}
 			</Card>
 			<div className="flex flex-wrap items-center justify-between gap-3">
-				<p className="text-sm text-slate-600">
+				<p className="text-sm text-muted-foreground">
 					<FormattedMessage
 						id="common.changeSummary"
 						defaultMessage="변경: 추가 {added}개 · 해제 {removed}개"

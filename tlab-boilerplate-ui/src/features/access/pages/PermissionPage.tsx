@@ -75,13 +75,13 @@ export function PermissionPage() {
 		<div className="space-y-5">
 			<div className="flex flex-wrap items-end justify-between gap-4">
 				<div>
-					<p className="mb-2 text-sm text-slate-500">
+					<p className="mb-2 text-sm text-muted-foreground">
 						<FormattedMessage
 							id="common.accessManagement"
 							defaultMessage="접근 관리"
 						/>{" "}
 						/{" "}
-						<span className="text-slate-900">
+						<span className="text-foreground">
 							<FormattedMessage
 								id="common.permissions"
 								defaultMessage="퍼미션"
@@ -91,7 +91,7 @@ export function PermissionPage() {
 					<h1 className="text-3xl font-semibold tracking-tight">
 						<FormattedMessage id="common.permissions" defaultMessage="퍼미션" />
 					</h1>
-					<p className="mt-1 text-sm text-slate-500">
+					<p className="mt-1 text-sm text-muted-foreground">
 						<FormattedMessage
 							id="access.permission.description"
 							defaultMessage="서비스에서 사용하는 퍼미션을 조회합니다."
@@ -101,13 +101,13 @@ export function PermissionPage() {
 				<CreatePermissionDialog />
 			</div>
 
-			<Card className="gap-0 bg-white py-0 shadow-sm">
-				<CardHeader className="flex flex-col gap-3 border-b border-slate-100 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+			<Card className="gap-0 bg-card py-0 shadow-sm">
+				<CardHeader className="flex flex-col gap-3 border-b border-border py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
 					<div className="flex items-center gap-3">
 						<CardTitle>
 							<FormattedMessage id="common.list" defaultMessage="목록" />
 						</CardTitle>
-						<span className="text-sm text-slate-500">
+						<span className="text-sm text-muted-foreground">
 							{data ? (
 								<FormattedMessage
 									id="common.itemCount"
@@ -152,7 +152,7 @@ export function PermissionPage() {
 					</form>
 				</CardHeader>
 				{isPending ? (
-					<output className="block px-5 py-12 text-center text-sm text-slate-500">
+					<output className="block px-5 py-12 text-center text-sm text-muted-foreground">
 						<FormattedMessage
 							id="access.permission.loading"
 							defaultMessage="퍼미션을 불러오는 중입니다."
@@ -176,7 +176,7 @@ export function PermissionPage() {
 						)}
 					</p>
 				) : data.items.length === 0 ? (
-					<p className="px-5 py-12 text-center text-sm text-slate-500">
+					<p className="px-5 py-12 text-center text-sm text-muted-foreground">
 						{code ? (
 							<FormattedMessage
 								id="common.searchEmpty"
@@ -191,7 +191,7 @@ export function PermissionPage() {
 					</p>
 				) : (
 					<Table className="min-w-[620px]">
-						<TableHeader className="bg-slate-50 text-xs text-slate-500">
+						<TableHeader className="bg-muted/50 text-xs text-muted-foreground">
 							<TableRow>
 								<TableHead className="px-5 sm:px-6">
 									<FormattedMessage id="common.code" defaultMessage="코드" />
@@ -213,7 +213,7 @@ export function PermissionPage() {
 									<TableCell className="px-5 py-4 font-medium sm:px-6">
 										{permission.code}
 									</TableCell>
-									<TableCell className="px-5 py-4 text-slate-600 sm:px-6">
+									<TableCell className="px-5 py-4 text-muted-foreground sm:px-6">
 										{permission.description ?? "—"}
 									</TableCell>
 									<TableCell className="px-5 py-4 text-right sm:px-6">
@@ -246,7 +246,7 @@ export function PermissionPage() {
 						</TableBody>
 					</Table>
 				)}
-				<div className="border-t border-slate-100 px-5 py-4 sm:px-6">
+				<div className="border-t border-border px-5 py-4 sm:px-6">
 					<Pagination>
 						<PaginationContent>
 							<PaginationItem>

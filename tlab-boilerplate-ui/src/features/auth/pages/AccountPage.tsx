@@ -1,5 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import { FormattedMessage } from "react-intl";
+import { ThemeSelect } from "../../../components/ThemeSelect";
 import { Button } from "../../../components/ui/button";
 import { useLogout } from "../hooks/useLogout";
 import type { CurrentUser } from "../types";
@@ -20,13 +21,16 @@ export function AccountPage({ user }: { user: CurrentUser }) {
 		<main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-8 p-8">
 			<header className="flex items-center justify-between border-b pb-5">
 				<span className="text-lg font-semibold">tlab</span>
-				<Button
-					variant="outline"
-					onClick={handleLogout}
-					disabled={signOut.isPending}
-				>
-					<FormattedMessage id="common.logout" defaultMessage="로그아웃" />
-				</Button>
+				<div className="flex items-center gap-2">
+					<ThemeSelect />
+					<Button
+						variant="outline"
+						onClick={handleLogout}
+						disabled={signOut.isPending}
+					>
+						<FormattedMessage id="common.logout" defaultMessage="로그아웃" />
+					</Button>
+				</div>
 			</header>
 			<div>
 				<h1 className="text-3xl font-semibold">

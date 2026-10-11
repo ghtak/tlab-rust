@@ -80,7 +80,7 @@ export function DashboardPage() {
 	return (
 		<div className="space-y-6">
 			<div>
-				<p className="mb-2 text-sm text-slate-500">
+				<p className="mb-2 text-sm text-muted-foreground">
 					<FormattedMessage
 						id="dashboard.breadcrumb"
 						defaultMessage="홈 / 대시보드"
@@ -94,14 +94,14 @@ export function DashboardPage() {
 								defaultMessage="시스템 대시보드"
 							/>
 						</h1>
-						<p className="mt-2 text-sm text-slate-500">
+						<p className="mt-2 text-sm text-muted-foreground">
 							<FormattedMessage
 								id="dashboard.description"
 								defaultMessage="호스트 자원과 현재 서버의 요청·DB 풀 상태"
 							/>
 						</p>
 					</div>
-					<p className="text-xs text-slate-500">
+					<p className="text-xs text-muted-foreground">
 						{data ? (
 							<FormattedMessage
 								id="dashboard.lastSample"
@@ -121,7 +121,7 @@ export function DashboardPage() {
 			{isError && (
 				<p
 					role="alert"
-					className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
+					className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
 				>
 					{data ? (
 						<FormattedMessage
@@ -142,7 +142,7 @@ export function DashboardPage() {
 				</p>
 			)}
 			{isPending && (
-				<p className="text-sm text-slate-500">
+				<p className="text-sm text-muted-foreground">
 					<FormattedMessage
 						id="dashboard.loading"
 						defaultMessage="시스템 정보를 불러오는 중입니다."
@@ -221,7 +221,7 @@ export function DashboardPage() {
 					</div>
 
 					<div className="grid gap-4 xl:grid-cols-2">
-						<Card className="bg-white">
+						<Card className="bg-card">
 							<CardHeader>
 								<CardTitle>
 									<FormattedMessage
@@ -248,7 +248,7 @@ export function DashboardPage() {
 								/>
 							</CardContent>
 						</Card>
-						<Card className="bg-white">
+						<Card className="bg-card">
 							<CardHeader>
 								<CardTitle>
 									<FormattedMessage
@@ -277,7 +277,7 @@ export function DashboardPage() {
 						</Card>
 					</div>
 
-					<Card className="bg-white">
+					<Card className="bg-card">
 						<CardHeader>
 							<CardTitle>
 								<FormattedMessage
@@ -308,7 +308,7 @@ export function DashboardPage() {
 													</span>
 													<span>{percent(usage)}</span>
 												</div>
-												<div className="h-2 rounded-full bg-slate-100">
+												<div className="h-2 rounded-full bg-muted">
 													<div
 														className="h-2 rounded-full bg-blue-500"
 														style={{
@@ -321,7 +321,7 @@ export function DashboardPage() {
 									)}
 								</div>
 							) : (
-								<p className="text-sm text-slate-500">
+								<p className="text-sm text-muted-foreground">
 									<FormattedMessage
 										id="dashboard.measuringCpu"
 										defaultMessage="CPU 사용률 측정 중입니다."
@@ -331,7 +331,7 @@ export function DashboardPage() {
 						</CardContent>
 					</Card>
 
-					<Card className="bg-white">
+					<Card className="bg-card">
 						<CardHeader>
 							<CardTitle>
 								<FormattedMessage
@@ -389,7 +389,7 @@ export function DashboardPage() {
 										<TableRow>
 											<TableCell
 												colSpan={4}
-												className="py-6 text-center text-slate-500"
+												className="py-6 text-center text-muted-foreground"
 											>
 												<FormattedMessage
 													id="dashboard.noProcesses"
@@ -418,9 +418,9 @@ function SummaryCard({
 	description: string;
 }) {
 	return (
-		<Card className="bg-white">
+		<Card className="bg-card">
 			<CardHeader>
-				<CardTitle className="text-sm text-slate-600">{title}</CardTitle>
+				<CardTitle className="text-sm text-muted-foreground">{title}</CardTitle>
 			</CardHeader>
 			<CardContent>
 				<p className="text-3xl font-semibold tracking-tight">{value}</p>

@@ -11,7 +11,7 @@ export function LocaleSelect() {
 				id: "common.language",
 				defaultMessage: "언어",
 			})}
-			className="rounded-md border border-slate-200 bg-white px-2 py-1 text-sm"
+			className="rounded-md border border-border bg-background text-foreground px-2 py-1 text-sm"
 			value={locale}
 			onChange={(event) => setLocale(event.target.value as "ko" | "en")}
 		>

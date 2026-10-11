@@ -25,9 +25,9 @@ export function MetricChart({ label, points, value, color }: MetricChartProps) {
 
 	return (
 		<div>
-			<div className="h-36 rounded-lg bg-slate-50">
+			<div className="h-36 rounded-lg bg-muted/50">
 				{valid.length < 2 ? (
-					<p className="flex h-full items-center justify-center text-sm text-slate-500">
+					<p className="flex h-full items-center justify-center text-sm text-muted-foreground">
 						<FormattedMessage
 							id="dashboard.chartCollecting"
 							defaultMessage="그래프 데이터를 모으는 중입니다."
@@ -49,7 +49,7 @@ export function MetricChart({ label, points, value, color }: MetricChartProps) {
 					>
 						<path
 							d="M8 8 H592 M8 65 H592 M8 122 H592"
-							stroke="#e2e8f0"
+							stroke="var(--border)"
 							fill="none"
 						/>
 						<path
@@ -62,7 +62,7 @@ export function MetricChart({ label, points, value, color }: MetricChartProps) {
 					</svg>
 				)}
 			</div>
-			<div className="mt-2 flex justify-between text-xs text-slate-500">
+			<div className="mt-2 flex justify-between text-xs text-muted-foreground">
 				<span>{valid.length > 0 ? formatTime(first, intl.locale) : "—"}</span>
 				<span>0–100%</span>
 				<span>{valid.length > 0 ? formatTime(last, intl.locale) : "—"}</span>
