@@ -3,7 +3,7 @@ use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use tlab::jwt::{IssuedToken, TokenPair, TokenUse};
+use tlab::jwt::{SignedJwt, SignedJwtPair, TokenUse};
 use uuid::Uuid;
 
 use crate::{
@@ -28,7 +28,7 @@ impl TokenService {
         &self,
         context: &mut AppDBCtx<'_>,
         user_account_id: i64,
-    ) -> tlab::Result<TokenPair> {
+    ) -> tlab::Result<SignedJwtPair> {
         let session_id = Uuid::new_v4();
         let tokens = self
             .issue_pair(context, user_account_id, session_id)
@@ -64,7 +64,7 @@ impl TokenService {
         context: &mut AppDBCtx<'_>,
         user_account_id: i64,
         session_id: Uuid,
-    ) -> tlab::Result<TokenPair> {
+    ) -> tlab::Result<SignedJwtPair> {
         let app = self
             .app_claims(context, user_account_id, session_id)
             .await?;
@@ -77,7 +77,7 @@ impl TokenService {
         context: &mut AppDBCtx<'_>,
         user_account_id: i64,
         session_id: Uuid,
-    ) -> tlab::Result<IssuedToken> {
+    ) -> tlab::Result<SignedJwt> {
         let app = self
             .app_claims(context, user_account_id, session_id)
             .await?;
@@ -89,8 +89,8 @@ impl TokenService {
         Sha256::digest(token.as_bytes()).into()
     }
 
-    pub fn token_expires_at(token: &IssuedToken) -> tlab::Result<DateTime<Utc>> {
-        i64::try_from(token.expires_at)
+    pub fn token_expires_at(token: &SignedJwt) -> tlab::Result<DateTime<Utc>> {
+        i64::try_from(token.claims.exp)
             .ok()
             .and_then(|timestamp| DateTime::<Utc>::from_timestamp(timestamp, 0))
             .ok_or_else(|| tlab::Error::IllegalState("invalid refresh token expiration".into()))

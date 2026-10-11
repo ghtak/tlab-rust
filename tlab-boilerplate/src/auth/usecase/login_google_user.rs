@@ -35,7 +35,7 @@ impl LoginGoogleUserUsecase {
     pub async fn execute(
         &self,
         command: &LoginGoogleUserCommand,
-    ) -> tlab::Result<tlab::jwt::TokenPair> {
+    ) -> tlab::Result<tlab::jwt::SignedJwtPair> {
         let claims =
             tlab::google_oauth2::handle_oauth2_callback(&self.google_oauth2, &command.code).await?;
         self.login_with_claims(claims).await
@@ -44,7 +44,7 @@ impl LoginGoogleUserUsecase {
     async fn login_with_claims(
         &self,
         claims: tlab::google_oauth2::GoogleIdTokenClaims,
-    ) -> tlab::Result<tlab::jwt::TokenPair> {
+    ) -> tlab::Result<tlab::jwt::SignedJwtPair> {
         let registration = if claims.email_verified {
             claims
                 .email

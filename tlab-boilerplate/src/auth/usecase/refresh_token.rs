@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use chrono::Utc;
 
-use tlab::jwt::{IssuedToken, TokenPair};
+use tlab::jwt::{SignedJwt, SignedJwtPair};
 
 use crate::{
     app_container::AppDB,
@@ -30,7 +30,7 @@ impl RefreshTokenUsecase {
         }
     }
 
-    pub async fn execute(&self, command: &RefreshTokenCommand) -> tlab::Result<TokenPair> {
+    pub async fn execute(&self, command: &RefreshTokenCommand) -> tlab::Result<SignedJwtPair> {
         let (user_account_id, session_id) = self
             .token_service
             .decode_refresh_token(&command.refresh_token)?;
@@ -61,7 +61,7 @@ impl RefreshTokenUsecase {
         Ok(tokens)
     }
 
-    pub async fn execute_access(&self, command: &RefreshTokenCommand) -> tlab::Result<IssuedToken> {
+    pub async fn execute_access(&self, command: &RefreshTokenCommand) -> tlab::Result<SignedJwt> {
         let (user_account_id, session_id) = self
             .token_service
             .decode_refresh_token(&command.refresh_token)?;

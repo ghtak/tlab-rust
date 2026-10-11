@@ -17,7 +17,7 @@ pub struct LoginManagedUserCommand {
 }
 
 pub struct LoginManagedUserResult {
-    pub tokens: tlab::jwt::TokenPair,
+    pub tokens: tlab::jwt::SignedJwtPair,
 }
 
 pub struct LoginManagedUserUsecase {

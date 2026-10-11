@@ -80,15 +80,15 @@ pub struct JwtConfig {
 }
 
 #[derive(Debug, Clone)]
-pub struct IssuedToken {
+pub struct SignedJwt {
     pub token: String,
-    pub expires_at: u64,
+    pub claims: JwtClaims,
 }
 
 #[derive(Debug, Clone)]
-pub struct TokenPair {
-    pub access: IssuedToken,
-    pub refresh: IssuedToken,
+pub struct SignedJwtPair {
+    pub access: SignedJwt,
+    pub refresh: SignedJwt,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -173,7 +173,7 @@ impl JwtCodec {
         Ok(codec)
     }
 
-    pub fn issue_pair(&self, subject: &str, app: Option<Value>) -> Result<TokenPair> {
+    pub fn issue_pair(&self, subject: &str, app: Option<Value>) -> Result<SignedJwtPair> {
         if subject.is_empty() {
             return Err(Error::IllegalState("JWT subject is empty".into()));
         }
@@ -192,10 +192,10 @@ impl JwtCodec {
             self.refresh_token_ttl_seconds,
             app,
         )?;
-        Ok(TokenPair { access, refresh })
+        Ok(SignedJwtPair { access, refresh })
     }
 
-    pub fn issue_access(&self, subject: &str, app: Option<Value>) -> Result<IssuedToken> {
+    pub fn issue_access(&self, subject: &str, app: Option<Value>) -> Result<SignedJwt> {
         if subject.is_empty() {
             return Err(Error::IllegalState("JWT subject is empty".into()));
         }
@@ -229,7 +229,7 @@ impl JwtCodec {
         iat: u64,
         ttl: u64,
         app: Option<Value>,
-    ) -> Result<IssuedToken> {
+    ) -> Result<SignedJwt> {
         let exp = iat
             .checked_add(ttl)
             .ok_or_else(|| Error::IllegalState("JWT expiration overflow".into()))?;
@@ -246,10 +246,7 @@ impl JwtCodec {
         let token =
             jsonwebtoken::encode(&Header::new(Algorithm::EdDSA), &claims, &self.encoding_key)
                 .map_err(|error| Error::Internal(anyhow::anyhow!(error)))?;
-        Ok(IssuedToken {
-            token,
-            expires_at: exp,
-        })
+        Ok(SignedJwt { token, claims })
     }
 }
 
@@ -335,12 +332,12 @@ mod tests {
         assert_eq!(access.sub, "user-42");
         assert_eq!(access.token_use, TokenUse::Access);
         assert!(access.app.is_none());
-        assert_eq!(pair.access.expires_at, access.exp);
+        assert_eq!(pair.access.claims, access);
         assert_eq!(access.exp - access.iat, 60);
         assert_eq!(refresh.sub, "user-42");
         assert_eq!(refresh.token_use, TokenUse::Refresh);
         assert!(refresh.app.is_none());
-        assert_eq!(pair.refresh.expires_at, refresh.exp);
+        assert_eq!(pair.refresh.claims, refresh);
         assert_eq!(refresh.exp - refresh.iat, 3600);
         assert!(matches!(
             config.key_files.generate(),

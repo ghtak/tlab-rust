@@ -16,3 +16,7 @@
 
 - [RBAC 인증 연계 구현안](../tlab-boilerplate/docs/plan/rbac-integration-plan.md)
 - [JWT 구현안](../tlab-boilerplate/docs/plan/jwt-implementation-plan.md)
+
+향후 적용을 검토할 설계안이다. 현재 구현 동작과 구분해 읽는다.
+
+- [Access token 무효화 확장안](../tlab-boilerplate/docs/plan/access-token-revocation.md)
