@@ -285,10 +285,10 @@ mod tests {
         let first = login.execute(&command).await.unwrap();
         let second = login.execute(&command).await.unwrap();
         assert_ne!(first.tokens.refresh.token, second.tokens.refresh.token);
-        assert!(matches!(
-            token_service.verify_access(&first.tokens.access.token).await,
-            Err(tlab::Error::InvalidToken)
-        ));
+        token_service
+            .verify_access(&first.tokens.access.token)
+            .await
+            .unwrap();
         token_service
             .verify_access(&second.tokens.access.token)
             .await
@@ -319,6 +319,10 @@ mod tests {
         };
         logout.execute(&command).await.unwrap();
         logout.execute(&command).await.unwrap();
+        assert!(matches!(
+            token_service.verify_access(&first.tokens.access.token).await,
+            Err(tlab::Error::InvalidToken)
+        ));
         token_service
             .verify_access(&second.tokens.access.token)
             .await

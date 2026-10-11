@@ -220,8 +220,17 @@ mod tests {
     #[tokio::test]
     async fn refreshes_replaced_access_cookie_when_refresh_token_is_valid() {
         let (auth_app, container) = test_app::setup().await;
-        let (old_access, refresh_token) = login_tokens(auth_app.clone()).await;
-        let _ = login_tokens(auth_app).await;
+        let (old_access, refresh_token) = login_tokens(auth_app).await;
+        let old_claims = container.jwt_codec.verify(&old_access).unwrap();
+        let replacement = container
+            .jwt_codec
+            .issue_access(&old_claims.sub, old_claims.app)
+            .unwrap();
+        container
+            .token_service
+            .activate_access(&replacement)
+            .await
+            .unwrap();
 
         let app = Router::<Arc<AppContainer>>::new()
             .route("/test", get(|_claims: AccessClaims| async { StatusCode::OK }))

@@ -19,7 +19,7 @@ use crate::{
 pub struct TokenService {
     jwt_codec: Arc<tlab::jwt::JwtCodec>,
     // TODO: Replace this process-local map with Redis when authentication spans instances.
-    access_jtis: RwLock<HashMap<i64, String>>,
+    access_jtis: RwLock<HashMap<(i64, Uuid), String>>,
 }
 
 impl TokenService {
@@ -39,12 +39,13 @@ impl TokenService {
             .sub
             .parse::<i64>()
             .map_err(|_| tlab::Error::InvalidToken)?;
+        let session_id = Self::session_id(&claims).ok_or(tlab::Error::InvalidToken)?;
         let jti = claims.jti.as_deref().ok_or(tlab::Error::InvalidToken)?;
         if self
             .access_jtis
             .read()
             .await
-            .get(&user_account_id)
+            .get(&(user_account_id, session_id))
             .map(String::as_str)
             != Some(jti)
         {
@@ -59,6 +60,8 @@ impl TokenService {
             .sub
             .parse::<i64>()
             .map_err(|_| tlab::Error::IllegalState("invalid issued access subject".into()))?;
+        let session_id = Self::session_id(&access.claims)
+            .ok_or_else(|| tlab::Error::IllegalState("invalid issued access session".into()))?;
         let jti = access
             .claims
             .jti
@@ -67,14 +70,15 @@ impl TokenService {
         self.access_jtis
             .write()
             .await
-            .insert(user_account_id, jti.clone());
+            .insert((user_account_id, session_id), jti.clone());
         Ok(())
     }
 
-    pub async fn revoke_access(&self, user_account_id: i64, jti: &str) {
+    pub async fn revoke_access(&self, user_account_id: i64, session_id: Uuid, jti: &str) {
         let mut access_jtis = self.access_jtis.write().await;
-        if access_jtis.get(&user_account_id).map(String::as_str) == Some(jti) {
-            access_jtis.remove(&user_account_id);
+        let key = (user_account_id, session_id);
+        if access_jtis.get(&key).map(String::as_str) == Some(jti) {
+            access_jtis.remove(&key);
         }
     }
 
@@ -106,10 +110,7 @@ impl TokenService {
             .sub
             .parse::<i64>()
             .map_err(|_| tlab::Error::InvalidToken)?;
-        let app = claims.app.ok_or(tlab::Error::InvalidToken)?;
-        let session_id = serde_json::from_value::<AppClaims>(app)
-            .map_err(|_| tlab::Error::InvalidToken)?
-            .session_id;
+        let session_id = Self::session_id(&claims).ok_or(tlab::Error::InvalidToken)?;
         Ok((user_account_id, session_id))
     }
 
@@ -163,5 +164,11 @@ impl TokenService {
         })
         .map_err(anyhow::Error::from)
         .map_err(tlab::Error::from)
+    }
+
+    fn session_id(claims: &JwtClaims) -> Option<Uuid> {
+        serde_json::from_value::<AppClaims>(claims.app.as_ref()?.clone())
+            .ok()
+            .map(|app| app.session_id)
     }
 }

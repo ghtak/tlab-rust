@@ -32,7 +32,11 @@ impl LogoutUserUsecase {
         )
         .await?;
         self.token_service
-            .revoke_access(command.user_account_id, &command.access_jti)
+            .revoke_access(
+                command.user_account_id,
+                command.session_id,
+                &command.access_jti,
+            )
             .await;
         Ok(())
     }

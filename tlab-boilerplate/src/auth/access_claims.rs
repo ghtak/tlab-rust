@@ -223,17 +223,8 @@ mod tests {
         let codec = Arc::new(test_codec());
         let token_service = TokenService::new(codec.clone());
         let missing_app = codec.issue_pair("42", None).unwrap();
-        token_service.activate_access(&missing_app.access).await.unwrap();
-        let access =
-            HeaderValue::from_str(&format!("Bearer {}", missing_app.access.token)).unwrap();
-        assert_eq!(
-            extract_claims(Some(&access), &token_service)
-                .await
-                .err()
-                .unwrap()
-                .status_code,
-            axum::http::StatusCode::UNAUTHORIZED
-        );
+        assert!(token_service.activate_access(&missing_app.access).await.is_err());
+        assert!(AccessClaims::from_jwt(missing_app.access.claims).is_err());
         for app in [
             serde_json::Value::Null,
             serde_json::json!({}),
@@ -243,34 +234,40 @@ mod tests {
             serde_json::json!({ "role_ids": [1], "session_id": "invalid" }),
         ] {
             let pair = codec.issue_pair("42", Some(app)).unwrap();
-            token_service.activate_access(&pair.access).await.unwrap();
-            let access = HeaderValue::from_str(&format!("Bearer {}", pair.access.token)).unwrap();
-            let response = extract_claims(Some(&access), &token_service)
-                .await
-                .err()
-                .unwrap();
-            assert_eq!(response.status_code, axum::http::StatusCode::UNAUTHORIZED);
+            assert!(token_service.activate_access(&pair.access).await.is_err());
+            assert!(AccessClaims::from_jwt(pair.access.claims).is_err());
         }
     }
 
     #[tokio::test]
-    async fn accepts_only_the_latest_registered_access_token() {
+    async fn keeps_sessions_independent_and_replaces_only_within_a_session() {
         let codec = Arc::new(test_codec());
         let token_service = TokenService::new(codec.clone());
-        let app = serde_json::json!({
+        let first_session = serde_json::json!({
             "role_ids": [1],
             "session_id": "550e8400-e29b-41d4-a716-446655440000"
         });
-        let first = codec.issue_access("42", Some(app.clone())).unwrap();
-        let second = codec.issue_access("42", Some(app)).unwrap();
+        let second_session = serde_json::json!({
+            "role_ids": [1],
+            "session_id": "550e8400-e29b-41d4-a716-446655440001"
+        });
+        let first = codec.issue_access("42", Some(first_session.clone())).unwrap();
+        let second = codec.issue_access("42", Some(second_session)).unwrap();
+        let replacement = codec.issue_access("42", Some(first_session)).unwrap();
         let first_header = HeaderValue::from_str(&format!("Bearer {}", first.token)).unwrap();
         let second_header = HeaderValue::from_str(&format!("Bearer {}", second.token)).unwrap();
+        let replacement_header =
+            HeaderValue::from_str(&format!("Bearer {}", replacement.token)).unwrap();
 
         assert!(extract_claims(Some(&first_header), &token_service).await.is_err());
         token_service.activate_access(&first).await.unwrap();
         assert!(extract_claims(Some(&first_header), &token_service).await.is_ok());
         token_service.activate_access(&second).await.unwrap();
+        assert!(extract_claims(Some(&first_header), &token_service).await.is_ok());
+        assert!(extract_claims(Some(&second_header), &token_service).await.is_ok());
+        token_service.activate_access(&replacement).await.unwrap();
         assert!(extract_claims(Some(&first_header), &token_service).await.is_err());
         assert!(extract_claims(Some(&second_header), &token_service).await.is_ok());
+        assert!(extract_claims(Some(&replacement_header), &token_service).await.is_ok());
     }
 }
