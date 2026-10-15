@@ -15,7 +15,6 @@ pub struct AppContainer {
     pub database: Arc<AppDB>,
     pub metrics: Arc<Metrics>,
     pub password_hasher: Arc<dyn tlab::hash::PasswordHasher>,
-    pub jwt_codec: Arc<tlab::jwt::JwtCodec>,
     pub rbac_service: Arc<crate::auth::service::RbacService>,
     pub token_service: Arc<crate::auth::service::TokenService>,
 }
@@ -27,14 +26,13 @@ impl AppContainer {
             &config.password_hash,
         )?);
         let jwt_codec = Arc::new(tlab::jwt::JwtCodec::new(&config.jwt)?);
-        let token_service = Arc::new(crate::auth::service::TokenService::new(jwt_codec.clone()));
+        let token_service = Arc::new(crate::auth::service::TokenService::new(jwt_codec));
         Ok(Self {
             config: config.clone(),
             http: tlab::http::Server::new(config.http.clone()),
             database: database.clone(),
             metrics: Arc::new(Metrics::new()),
             password_hasher,
-            jwt_codec,
             rbac_service: Arc::new(crate::auth::service::RbacService::new(database.clone())),
             token_service,
         })

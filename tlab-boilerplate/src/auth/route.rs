@@ -373,7 +373,8 @@ mod tests {
         .unwrap();
         drop(conn);
         let token = container
-            .jwt_codec
+            .token_service
+            .jwt_codec()
             .issue_pair(
                 &user.id.to_string(),
                 Some(serde_json::json!({
@@ -499,7 +500,12 @@ mod tests {
             container.config.jwt.access_token_ttl_seconds
         );
         assert_eq!(
-            container.jwt_codec.verify(new_access).unwrap().token_use,
+            container
+                .token_service
+                .jwt_codec()
+                .verify(new_access)
+                .unwrap()
+                .token_use,
             TokenUse::Access
         );
 

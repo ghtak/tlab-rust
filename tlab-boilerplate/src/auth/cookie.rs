@@ -221,9 +221,14 @@ mod tests {
     async fn refreshes_replaced_access_cookie_when_refresh_token_is_valid() {
         let (auth_app, container) = test_app::setup().await;
         let (old_access, refresh_token) = login_tokens(auth_app).await;
-        let old_claims = container.jwt_codec.verify(&old_access).unwrap();
+        let old_claims = container
+            .token_service
+            .jwt_codec()
+            .verify(&old_access)
+            .unwrap();
         let replacement = container
-            .jwt_codec
+            .token_service
+            .jwt_codec()
             .issue_access(&old_claims.sub, old_claims.app)
             .unwrap();
         container
@@ -274,8 +279,14 @@ mod tests {
     async fn access_claims_extension_takes_precedence_over_bearer() {
         let (app, container) = test_app::setup().await;
         let (access_token, _) = login_tokens(app).await;
-        let claims =
-            AccessClaims::from_jwt(container.jwt_codec.verify(&access_token).unwrap()).unwrap();
+        let claims = AccessClaims::from_jwt(
+            container
+                .token_service
+                .jwt_codec()
+                .verify(&access_token)
+                .unwrap(),
+        )
+        .unwrap();
         let subject = claims.jwt.sub.clone();
         let mut request = Request::get("/")
             .header(header::AUTHORIZATION, "Bearer invalid")

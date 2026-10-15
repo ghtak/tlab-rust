@@ -539,7 +539,8 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
         let without_permission = container
-            .jwt_codec
+            .token_service
+            .jwt_codec()
             .issue_pair(
                 "1",
                 Some(serde_json::json!({

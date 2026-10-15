@@ -130,7 +130,11 @@ mod tests {
                 })
                 .await
                 .unwrap();
-            let claims = app.jwt_codec.verify(&tokens.access.token).unwrap();
+            let claims = app
+                .token_service
+                .jwt_codec()
+                .verify(&tokens.access.token)
+                .unwrap();
             assert_eq!(claims.token_use, TokenUse::Access);
             let app_claims: crate::auth::access_claims::AppClaims =
                 serde_json::from_value(claims.app.unwrap()).unwrap();

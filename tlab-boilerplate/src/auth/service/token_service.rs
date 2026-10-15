@@ -30,6 +30,11 @@ impl TokenService {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn jwt_codec(&self) -> &tlab::jwt::JwtCodec {
+        &self.jwt_codec
+    }
+
     pub async fn verify_access(&self, token: &str) -> tlab::Result<JwtClaims> {
         let claims = self.jwt_codec.verify(token)?;
         if claims.token_use != TokenUse::Access {

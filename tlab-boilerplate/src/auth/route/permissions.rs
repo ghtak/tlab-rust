@@ -363,7 +363,8 @@ mod tests {
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 
         let token = container
-            .jwt_codec
+            .token_service
+            .jwt_codec()
             .issue_pair(
                 "1",
                 Some(serde_json::json!({
@@ -513,7 +514,8 @@ mod tests {
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 
         let token = container
-            .jwt_codec
+            .token_service
+            .jwt_codec()
             .issue_pair(
                 "1",
                 Some(serde_json::json!({
